@@ -1,0 +1,19 @@
+{
+  "name": "Money Saver",
+  "short_name": "Money Saver",
+  "description": "Plan financial goals, savings priorities, and monthly progress.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f7f8",
+  "theme_color": "#183027",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

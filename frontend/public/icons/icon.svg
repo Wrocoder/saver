@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Money Saver">
+  <rect width="512" height="512" rx="96" fill="#183027"/>
+  <path d="M128 256c0-76 58-132 142-132 38 0 73 11 100 31l-32 47c-19-14-42-21-69-21-49 0-83 31-83 75s34 75 83 75c27 0 50-7 69-21l32 47c-27 20-62 31-100 31-84 0-142-56-142-132Z" fill="#dcefd4"/>
+  <path d="M160 259h190" stroke="#dcefd4" stroke-width="42" stroke-linecap="round"/>
+  <path d="M251 110v292" stroke="#dcefd4" stroke-width="42" stroke-linecap="round"/>
+</svg>
