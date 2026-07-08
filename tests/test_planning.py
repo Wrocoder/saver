@@ -162,6 +162,47 @@ def test_smallest_goal_first_strategy_funds_lowest_remaining_amount_first() -> N
     assert plan.monthly_schedule[2].allocations == {car.id: Decimal("300")}
 
 
+def test_custom_strategy_uses_fixed_amounts_per_goal() -> None:
+    emergency_fund = FinancialGoal(
+        title="Emergency fund",
+        target_amount=Decimal("1000"),
+        current_amount=Decimal("100"),
+        priority=1,
+    )
+    trip = FinancialGoal(
+        title="Trip",
+        target_amount=Decimal("800"),
+        current_amount=Decimal("0"),
+        priority=2,
+    )
+
+    plan = build_financial_plan(
+        goals=[trip, emergency_fund],
+        monthly_available_amount=Decimal("300"),
+        strategy=AllocationStrategy(
+            type=AllocationStrategyType.CUSTOM,
+            fixed_amounts={
+                emergency_fund.id: Decimal("200"),
+                trip.id: Decimal("80"),
+            },
+        ),
+        today=date(2026, 7, 1),
+    )
+
+    assert plan.monthly_schedule[0].allocations == {
+        emergency_fund.id: Decimal("200"),
+        trip.id: Decimal("80"),
+    }
+    assert plan.monthly_schedule[4].allocations == {
+        emergency_fund.id: Decimal("100"),
+        trip.id: Decimal("80"),
+    }
+    assert plan.monthly_schedule[5].allocations == {trip.id: Decimal("80")}
+    projections = {projection.title: projection for projection in plan.goals}
+    assert projections["Emergency fund"].expected_completion_date == date(2026, 12, 1)
+    assert projections["Trip"].expected_completion_date == date(2027, 5, 1)
+
+
 def test_hard_deadline_is_marked_at_risk_when_projection_is_late() -> None:
     goal = FinancialGoal(
         title="Tuition",

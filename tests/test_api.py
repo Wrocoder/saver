@@ -157,6 +157,53 @@ def test_update_and_get_plan_strategy(client: TestClient) -> None:
     assert Decimal(strategy["weights"][second_goal["id"]]) == Decimal("30")
 
 
+def test_update_plan_strategy_supports_custom_fixed_amounts(client: TestClient) -> None:
+    first_goal = client.post(
+        "/api/goals",
+        json={"title": "Emergency fund", "target_amount": "1000", "currency": "USD", "priority": 1},
+    ).json()
+    second_goal = client.post(
+        "/api/goals",
+        json={"title": "Trip", "target_amount": "800", "currency": "USD", "priority": 2},
+    ).json()
+
+    update_response = client.post(
+        "/api/plan/strategy",
+        json={
+            "type": "custom",
+            "weights": {},
+            "fixed_amounts": {first_goal["id"]: "200", second_goal["id"]: "80"},
+        },
+    )
+
+    assert update_response.status_code == 200
+    plan = update_response.json()
+    assert plan["strategy"] == "custom"
+    assert Decimal(plan["monthly_schedule"][0]["allocations"][first_goal["id"]]) == Decimal("200")
+    assert Decimal(plan["monthly_schedule"][0]["allocations"][second_goal["id"]]) == Decimal("80")
+
+    strategy_response = client.get("/api/plan/strategy")
+    assert strategy_response.status_code == 200
+    strategy = strategy_response.json()
+    assert strategy["type"] == "custom"
+    assert Decimal(strategy["fixed_amounts"][first_goal["id"]]) == Decimal("200")
+    assert Decimal(strategy["fixed_amounts"][second_goal["id"]]) == Decimal("80")
+
+
+def test_custom_fixed_amount_strategy_rejects_unknown_goal_ids(client: TestClient) -> None:
+    response = client.post(
+        "/api/plan/strategy",
+        json={
+            "type": "custom",
+            "weights": {},
+            "fixed_amounts": {"missing-goal": "50"},
+        },
+    )
+
+    assert response.status_code == 400
+    assert "Unknown goal ids in fixed_amounts" in response.json()["detail"]
+
+
 def test_goal_ownership_is_scoped_by_user_header(client: TestClient) -> None:
     first_user = client.post(
         "/api/users",

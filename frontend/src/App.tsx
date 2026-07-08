@@ -1658,6 +1658,7 @@ function AllocationStrategyPanel({
 }) {
   const [type, setType] = useState<AllocationStrategySettings["type"]>("strict_priority");
   const [weights, setWeights] = useState<Record<string, string>>({});
+  const [fixedAmounts, setFixedAmounts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -1670,11 +1671,18 @@ function AllocationStrategyPanel({
         : "strict_priority"
     );
     setWeights(buildWeightDraft(goals, strategy?.weights ?? {}));
+    setFixedAmounts(buildFixedAmountDraft(goals, strategy?.fixed_amounts ?? {}));
   }, [goals, strategy]);
 
   const totalWeight = goals.reduce((sum, goal) => sum + Number(weights[goal.id] || 0), 0);
+  const totalFixedAmount = goals.reduce((sum, goal) => sum + Number(fixedAmounts[goal.id] || 0), 0);
   const isProportional = type === "proportional";
-  const canSave = goals.length > 0 && (!isProportional || totalWeight > 0);
+  const isCustom = type === "custom";
+  const canSave = goals.length > 0 && (
+    (isProportional && totalWeight > 0) ||
+    (isCustom && totalFixedAmount > 0) ||
+    (!isProportional && !isCustom)
+  );
 
   async function saveStrategy(event: FormEvent) {
     event.preventDefault();
@@ -1686,18 +1694,24 @@ function AllocationStrategyPanel({
             goals.map((goal) => [goal.id, normalizeWeight(weights[goal.id])])
           )
         : {};
+      const payloadFixedAmounts = isCustom
+        ? Object.fromEntries(
+            goals.map((goal) => [goal.id, normalizeFixedAmount(fixedAmounts[goal.id])])
+          )
+        : {};
       await apiRequest<Plan>("/api/plan/strategy", token, {
         method: "POST",
         body: JSON.stringify({
           type,
           weights: payloadWeights,
-          fixed_amounts: {}
+          fixed_amounts: payloadFixedAmounts
         })
       });
       void trackEvent(token, "allocation_strategy_updated", {
         type,
         goals_count: goals.length,
-        total_weight: isProportional ? totalWeight : null
+        total_weight: isProportional ? totalWeight : null,
+        total_fixed_amount: isCustom ? totalFixedAmount : null
       });
       onChanged();
     } catch (err) {
@@ -1709,6 +1723,10 @@ function AllocationStrategyPanel({
 
   function updateWeight(goalId: string, value: string) {
     setWeights((current) => ({ ...current, [goalId]: value }));
+  }
+
+  function updateFixedAmount(goalId: string, value: string) {
+    setFixedAmounts((current) => ({ ...current, [goalId]: value }));
   }
 
   function setEqualWeights() {
@@ -1749,7 +1767,7 @@ function AllocationStrategyPanel({
             aria-pressed={type === "proportional"}
             onClick={() => setType("proportional")}
           >
-            Proportional
+            Percent
           </button>
           <button
             type="button"
@@ -1766,6 +1784,14 @@ function AllocationStrategyPanel({
             onClick={() => setType("smallest_goal_first")}
           >
             Smallest
+          </button>
+          <button
+            type="button"
+            className={type === "custom" ? "active" : ""}
+            aria-pressed={type === "custom"}
+            onClick={() => setType("custom")}
+          >
+            Fixed
           </button>
         </div>
         {isProportional && (
@@ -1796,6 +1822,27 @@ function AllocationStrategyPanel({
             ))}
           </div>
         )}
+        {isCustom && (
+          <div className="weight-editor">
+            <div className="weight-header">
+              <span>Total fixed: {Number.isFinite(totalFixedAmount) ? totalFixedAmount : 0}</span>
+            </div>
+            {goals.length === 0 && <EmptyState text="Add goals before setting fixed monthly amounts." />}
+            {goals.map((goal) => (
+              <label className="weight-row" key={goal.id}>
+                <span>{goal.title}</span>
+                <input
+                  aria-label={`${goal.title} fixed monthly amount`}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={fixedAmounts[goal.id] ?? ""}
+                  onChange={(event) => updateFixedAmount(goal.id, event.target.value)}
+                />
+              </label>
+            ))}
+          </div>
+        )}
         {error && <div className="inline-error" role="alert">{error}</div>}
         <button className="primary-button compact" type="submit" disabled={loading || !canSave}>
           <Save size={17} /> Save strategy
@@ -1820,7 +1867,17 @@ function buildWeightDraft(goals: Goal[], savedWeights: Record<string, string>): 
   return weights;
 }
 
+function buildFixedAmountDraft(goals: Goal[], savedFixedAmounts: Record<string, string>): Record<string, string> {
+  if (!goals.length) return {};
+  return Object.fromEntries(goals.map((goal) => [goal.id, savedFixedAmounts[goal.id] ?? "0"]));
+}
+
 function normalizeWeight(value: string | undefined): string {
+  const amount = Number(value ?? 0);
+  return String(Number.isFinite(amount) && amount > 0 ? amount : 0);
+}
+
+function normalizeFixedAmount(value: string | undefined): string {
   const amount = Number(value ?? 0);
   return String(Number.isFinite(amount) && amount > 0 ? amount : 0);
 }

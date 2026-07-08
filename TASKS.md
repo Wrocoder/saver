@@ -84,7 +84,7 @@
 - [x] Покрыть тестами edge cases: нулевая доступная сумма, достигнутые цели, просроченные deadline.
 - [x] Поддержать стратегию `nearest_deadline`.
 - [x] Поддержать стратегию `smallest_goal_first`.
-- [ ] Поддержать custom fixed amount allocation.
+- [x] Поддержать custom fixed amount allocation.
 - [ ] Добавить моделирование разовых поступлений.
 - [ ] Добавить моделирование пропущенных месяцев.
 - [ ] Добавить cautious / realistic / optimistic scenario presets.

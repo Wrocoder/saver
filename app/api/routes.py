@@ -295,6 +295,8 @@ def update_strategy(
     )
     if strategy.type == AllocationStrategyType.PROPORTIONAL:
         validate_proportional_weights(strategy, repo)
+    if strategy.type == AllocationStrategyType.CUSTOM:
+        validate_custom_fixed_amounts(strategy, repo)
     settings = repo.update_strategy(strategy)
     summary = finance_repo.build_summary()
     return build_plan_response(summary.effective_monthly_available_amount, settings.strategy, repo)
@@ -347,6 +349,8 @@ def build_plan_response(
 ) -> PlanResponse:
     if strategy.type == AllocationStrategyType.PROPORTIONAL:
         validate_proportional_weights(strategy, repo)
+    if strategy.type == AllocationStrategyType.CUSTOM:
+        validate_custom_fixed_amounts(strategy, repo)
 
     goals, currency_conflicts = repo.list_goals_for_planning_with_warnings()
 
@@ -368,4 +372,26 @@ def validate_proportional_weights(strategy: AllocationStrategy, repo: GoalsRepos
         raise HTTPException(
             status_code=400,
             detail=f"Unknown goal ids in weights: {sorted(unknown_goal_ids)}",
+        )
+
+
+def validate_custom_fixed_amounts(strategy: AllocationStrategy, repo: GoalsRepository) -> None:
+    if not strategy.fixed_amounts:
+        return
+
+    goal_ids = {goal.id for goal in repo.list_goals()}
+    unknown_goal_ids = set(strategy.fixed_amounts) - goal_ids
+    if unknown_goal_ids:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown goal ids in fixed_amounts: {sorted(unknown_goal_ids)}",
+        )
+
+    negative_goal_ids = [
+        goal_id for goal_id, amount in strategy.fixed_amounts.items() if amount < 0
+    ]
+    if negative_goal_ids:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Negative fixed amounts are not allowed: {sorted(negative_goal_ids)}",
         )
