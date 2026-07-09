@@ -228,6 +228,31 @@ def test_one_time_inflow_scenario_adds_extra_funds_to_selected_month(client: Tes
     assert payload["scenario"]["goals"][0]["expected_completion_date"] < payload["base"]["goals"][0]["expected_completion_date"]
 
 
+def test_skipped_months_scenario_removes_regular_funding_for_period(client: TestClient) -> None:
+    goal = client.post(
+        "/api/goals",
+        json={"title": "Laptop", "target_amount": "900", "currency": "USD", "priority": 1},
+    ).json()
+
+    response = client.post(
+        "/api/scenarios/skipped-months",
+        json={
+            "scenario_name": "missed_salary",
+            "start_month": 1,
+            "month_count": 1,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["scenario_name"] == "missed_salary"
+    assert Decimal(payload["base"]["monthly_schedule"][0]["allocations"][goal["id"]]) == Decimal("300")
+    assert payload["scenario"]["monthly_schedule"][0]["month_index"] == 2
+    assert Decimal(payload["scenario"]["monthly_schedule"][0]["allocations"][goal["id"]]) == Decimal("300")
+    assert payload["scenario"]["goals"][0]["allocated_first_month"] == "0"
+    assert payload["scenario"]["goals"][0]["expected_completion_date"] > payload["base"]["goals"][0]["expected_completion_date"]
+
+
 def test_goal_ownership_is_scoped_by_user_header(client: TestClient) -> None:
     first_user = client.post(
         "/api/users",

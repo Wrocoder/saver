@@ -24,6 +24,7 @@ from app.api.schemas import (
     PriorityUpdate,
     ScenarioRequest,
     ScenarioResponse,
+    SkippedMonthsScenarioRequest,
     StrategyResponse,
     StrategyUpdate,
     UserCreate,
@@ -363,6 +364,36 @@ def simulate_one_time_inflow(
         monthly_available_amount=summary.effective_monthly_available_amount,
         strategy=settings.strategy,
         one_time_inflows={payload.month_index: payload.amount},
+    )
+    scenario_plan.conflicts = [*currency_conflicts, *scenario_plan.conflicts]
+    return ScenarioResponse(
+        scenario_name=payload.scenario_name,
+        base=base_plan,
+        scenario=scenario_plan,
+    )
+
+
+@router.post("/scenarios/skipped-months", response_model=ScenarioResponse)
+def simulate_skipped_months(
+    payload: SkippedMonthsScenarioRequest,
+    repo: GoalsRepository = Depends(get_repository),
+    finance_repo: FinanceRepository = Depends(get_finance_repository),
+) -> ScenarioResponse:
+    settings = repo.get_plan_settings()
+    summary = finance_repo.build_summary()
+    goals, currency_conflicts = repo.list_goals_for_planning_with_warnings()
+    skipped_months = set(range(payload.start_month, payload.start_month + payload.month_count))
+    base_plan = build_financial_plan(
+        goals=goals,
+        monthly_available_amount=summary.effective_monthly_available_amount,
+        strategy=settings.strategy,
+    )
+    base_plan.conflicts = [*currency_conflicts, *base_plan.conflicts]
+    scenario_plan = build_financial_plan(
+        goals=goals,
+        monthly_available_amount=summary.effective_monthly_available_amount,
+        strategy=settings.strategy,
+        skipped_months=skipped_months,
     )
     scenario_plan.conflicts = [*currency_conflicts, *scenario_plan.conflicts]
     return ScenarioResponse(

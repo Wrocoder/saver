@@ -1573,6 +1573,8 @@ function ScenarioPanel({
   const [amount, setAmount] = useState("");
   const [oneTimeAmount, setOneTimeAmount] = useState("");
   const [oneTimeMonth, setOneTimeMonth] = useState("2");
+  const [skipStartMonth, setSkipStartMonth] = useState("1");
+  const [skipMonthCount, setSkipMonthCount] = useState("1");
   const [scenario, setScenario] = useState<ScenarioResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [scenarioLoading, setScenarioLoading] = useState(false);
@@ -1622,6 +1624,32 @@ function ScenarioPanel({
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not run one-time inflow scenario");
+    } finally {
+      setScenarioLoading(false);
+    }
+  }
+
+  async function submitSkippedMonths(event: FormEvent) {
+    event.preventDefault();
+    setScenarioLoading(true);
+    setError(null);
+    try {
+      const result = await apiRequest<ScenarioResponse>("/api/scenarios/skipped-months", token, {
+        method: "POST",
+        body: JSON.stringify({
+          scenario_name: "skipped_months",
+          start_month: Number(skipStartMonth),
+          month_count: Number(skipMonthCount)
+        })
+      });
+      setScenario(result);
+      void trackEvent(token, "scenario_run", {
+        scenario_name: result.scenario_name,
+        start_month: Number(skipStartMonth),
+        month_count: Number(skipMonthCount)
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not run skipped months scenario");
     } finally {
       setScenarioLoading(false);
     }
@@ -1682,6 +1710,33 @@ function ScenarioPanel({
           />
         </label>
         <button className="primary-button" type="submit" disabled={scenarioLoading}><Plus size={17} /> Run inflow</button>
+      </form>
+      <form className="scenario-form skip-months-form" onSubmit={submitSkippedMonths}>
+        <label>
+          Skip from month
+          <input
+            type="number"
+            min="1"
+            max="600"
+            step="1"
+            value={skipStartMonth}
+            onChange={(event) => setSkipStartMonth(event.target.value)}
+            required
+          />
+        </label>
+        <label>
+          Months skipped
+          <input
+            type="number"
+            min="1"
+            max="60"
+            step="1"
+            value={skipMonthCount}
+            onChange={(event) => setSkipMonthCount(event.target.value)}
+            required
+          />
+        </label>
+        <button className="primary-button" type="submit" disabled={scenarioLoading}><CalendarClock size={17} /> Run skip</button>
       </form>
       {error && <div className="inline-error" role="alert">{error}</div>}
       {!scenario && <EmptyState text="Run a scenario to compare projected dates." />}

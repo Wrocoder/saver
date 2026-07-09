@@ -173,6 +173,12 @@ class OneTimeInflowScenarioRequest(BaseModel):
     month_index: int = Field(ge=1, le=600)
 
 
+class SkippedMonthsScenarioRequest(BaseModel):
+    scenario_name: str = Field(default="skipped_months", max_length=120)
+    start_month: int = Field(default=1, ge=1, le=600)
+    month_count: int = Field(default=1, ge=1, le=60)
+
+
 class ScenarioResponse(BaseModel):
     scenario_name: str
     base: FinancialPlanResult

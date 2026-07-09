@@ -259,6 +259,48 @@ def test_one_time_inflow_can_fund_goal_without_monthly_amount() -> None:
     assert plan.conflicts == []
 
 
+def test_skipped_months_delay_goal_schedule() -> None:
+    goal = FinancialGoal(
+        title="Camera",
+        target_amount=Decimal("300"),
+        current_amount=Decimal("0"),
+    )
+
+    plan = build_financial_plan(
+        goals=[goal],
+        monthly_available_amount=Decimal("100"),
+        strategy=AllocationStrategy(type=AllocationStrategyType.STRICT_PRIORITY),
+        today=date(2026, 7, 1),
+        skipped_months={2},
+    )
+
+    assert [period.month_index for period in plan.monthly_schedule] == [1, 3, 4]
+    assert all(period.allocations == {goal.id: Decimal("100")} for period in plan.monthly_schedule)
+    assert plan.goals[0].allocated_first_month == Decimal("100")
+    assert plan.goals[0].expected_completion_date == date(2026, 11, 1)
+
+
+def test_skipping_first_month_sets_first_month_allocation_to_zero() -> None:
+    goal = FinancialGoal(
+        title="Course",
+        target_amount=Decimal("200"),
+        current_amount=Decimal("0"),
+    )
+
+    plan = build_financial_plan(
+        goals=[goal],
+        monthly_available_amount=Decimal("100"),
+        strategy=AllocationStrategy(type=AllocationStrategyType.STRICT_PRIORITY),
+        today=date(2026, 7, 1),
+        skipped_months={1},
+    )
+
+    assert [period.month_index for period in plan.monthly_schedule] == [2, 3]
+    assert plan.goals[0].allocated_first_month == Decimal("0")
+    assert plan.goals[0].expected_completion_date == date(2026, 10, 1)
+    assert plan.goals[0].status == "on_track"
+
+
 def test_hard_deadline_is_marked_at_risk_when_projection_is_late() -> None:
     goal = FinancialGoal(
         title="Tuition",

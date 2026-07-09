@@ -432,6 +432,10 @@ select:focus-visible {
   grid-template-columns: minmax(150px, 1fr) 110px auto;
 }
 
+.scenario-form.skip-months-form {
+  grid-template-columns: minmax(150px, 1fr) minmax(130px, 0.8fr) auto;
+}
+
 .scenario-form label {
   display: grid;
   gap: 7px;
@@ -1590,6 +1594,8 @@ select:focus {
   .price-form,
   .rules-form,
   .scenario-form,
+  .scenario-form.one-time-form,
+  .scenario-form.skip-months-form,
   .goal-row-edit,
   .entry-edit-grid {
     grid-template-columns: 1fr 1fr;
@@ -1697,6 +1703,8 @@ select:focus {
   .contribution-form,
   .currency-form,
   .scenario-form,
+  .scenario-form.one-time-form,
+  .scenario-form.skip-months-form,
   .scenario-result,
   .auth-layout {
     grid-template-columns: 1fr;

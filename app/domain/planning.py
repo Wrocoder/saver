@@ -57,6 +57,7 @@ def build_financial_plan(
     strategy: AllocationStrategy,
     today: date | None = None,
     one_time_inflows: dict[int, Decimal] | None = None,
+    skipped_months: set[int] | None = None,
 ) -> FinancialPlanResult:
     today = today or date.today()
     active_goals = [
@@ -72,6 +73,7 @@ def build_financial_plan(
         strategy,
         today,
         one_time_inflows=one_time_inflows,
+        skipped_months=skipped_months,
     )
 
     first_month = next((period for period in monthly_schedule if period.month_index == 1), None)
@@ -106,11 +108,17 @@ def simulate_allocation(
     strategy: AllocationStrategy,
     today: date,
     one_time_inflows: dict[int, Decimal] | None = None,
+    skipped_months: set[int] | None = None,
 ) -> tuple[list[MonthlyAllocation], dict[str, date]]:
     positive_one_time_inflows = {
         month_index: amount
         for month_index, amount in (one_time_inflows or {}).items()
         if month_index >= 1 and amount > 0
+    }
+    normalized_skipped_months = {
+        month_index
+        for month_index in (skipped_months or set())
+        if month_index >= 1
     }
     if monthly_available_amount <= 0 and not positive_one_time_inflows:
         return [], {}
@@ -128,9 +136,19 @@ def simulate_allocation(
         if not unfinished_goals:
             break
 
-        available_amount = monthly_available_amount + positive_one_time_inflows.get(month_index, Decimal("0"))
+        recurring_amount = (
+            Decimal("0")
+            if month_index in normalized_skipped_months
+            else monthly_available_amount
+        )
+        available_amount = recurring_amount + positive_one_time_inflows.get(month_index, Decimal("0"))
         if available_amount <= 0:
-            if has_future_funding(month_index, monthly_available_amount, positive_one_time_inflows):
+            if has_future_funding(
+                month_index,
+                monthly_available_amount,
+                positive_one_time_inflows,
+                normalized_skipped_months,
+            ):
                 continue
             break
 
@@ -142,7 +160,12 @@ def simulate_allocation(
         )
 
         if not any(amount > 0 for amount in allocations.values()):
-            if has_future_funding(month_index, monthly_available_amount, positive_one_time_inflows):
+            if has_future_funding(
+                month_index,
+                monthly_available_amount,
+                positive_one_time_inflows,
+                normalized_skipped_months,
+            ):
                 continue
             break
 
@@ -168,10 +191,20 @@ def has_future_funding(
     month_index: int,
     monthly_available_amount: Decimal,
     one_time_inflows: dict[int, Decimal],
+    skipped_months: set[int],
 ) -> bool:
-    if monthly_available_amount > 0:
-        return True
-    return any(future_month > month_index and amount > 0 for future_month, amount in one_time_inflows.items())
+    has_future_recurring_funding = (
+        monthly_available_amount > 0
+        and any(
+            future_month not in skipped_months
+            for future_month in range(month_index + 1, MAX_PROJECTION_MONTHS + 1)
+        )
+    )
+    has_future_one_time_funding = any(
+        future_month > month_index and amount > 0
+        for future_month, amount in one_time_inflows.items()
+    )
+    return has_future_recurring_funding or has_future_one_time_funding
 
 
 def allocate_period(
