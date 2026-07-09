@@ -204,6 +204,30 @@ def test_custom_fixed_amount_strategy_rejects_unknown_goal_ids(client: TestClien
     assert "Unknown goal ids in fixed_amounts" in response.json()["detail"]
 
 
+def test_one_time_inflow_scenario_adds_extra_funds_to_selected_month(client: TestClient) -> None:
+    goal = client.post(
+        "/api/goals",
+        json={"title": "Emergency fund", "target_amount": "1000", "currency": "USD", "priority": 1},
+    ).json()
+
+    response = client.post(
+        "/api/scenarios/one-time-inflow",
+        json={
+            "scenario_name": "bonus",
+            "amount": "500",
+            "month_index": 2,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["scenario_name"] == "bonus"
+    assert payload["base"]["strategy"] == payload["scenario"]["strategy"]
+    assert Decimal(payload["base"]["monthly_schedule"][1]["allocations"][goal["id"]]) == Decimal("300")
+    assert Decimal(payload["scenario"]["monthly_schedule"][1]["allocations"][goal["id"]]) == Decimal("700")
+    assert payload["scenario"]["goals"][0]["expected_completion_date"] < payload["base"]["goals"][0]["expected_completion_date"]
+
+
 def test_goal_ownership_is_scoped_by_user_header(client: TestClient) -> None:
     first_user = client.post(
         "/api/users",

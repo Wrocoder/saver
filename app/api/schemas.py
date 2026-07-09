@@ -167,6 +167,12 @@ class ScenarioRequest(BaseModel):
     monthly_available_amount: Decimal = Field(gt=0)
 
 
+class OneTimeInflowScenarioRequest(BaseModel):
+    scenario_name: str = Field(default="one_time_inflow", max_length=120)
+    amount: Decimal = Field(gt=0)
+    month_index: int = Field(ge=1, le=600)
+
+
 class ScenarioResponse(BaseModel):
     scenario_name: str
     base: FinancialPlanResult

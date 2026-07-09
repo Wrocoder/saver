@@ -1571,11 +1571,15 @@ function ScenarioPanel({
   status: PanelStatus;
 }) {
   const [amount, setAmount] = useState("");
+  const [oneTimeAmount, setOneTimeAmount] = useState("");
+  const [oneTimeMonth, setOneTimeMonth] = useState("2");
   const [scenario, setScenario] = useState<ScenarioResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [scenarioLoading, setScenarioLoading] = useState(false);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    setScenarioLoading(true);
     setError(null);
     try {
       const result = await apiRequest<ScenarioResponse>("/api/scenarios/monthly-amount", token, {
@@ -1592,6 +1596,34 @@ function ScenarioPanel({
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not run scenario");
+    } finally {
+      setScenarioLoading(false);
+    }
+  }
+
+  async function submitOneTimeInflow(event: FormEvent) {
+    event.preventDefault();
+    setScenarioLoading(true);
+    setError(null);
+    try {
+      const result = await apiRequest<ScenarioResponse>("/api/scenarios/one-time-inflow", token, {
+        method: "POST",
+        body: JSON.stringify({
+          scenario_name: "one_time_inflow",
+          amount: oneTimeAmount,
+          month_index: Number(oneTimeMonth)
+        })
+      });
+      setScenario(result);
+      void trackEvent(token, "scenario_run", {
+        scenario_name: result.scenario_name,
+        one_time_amount: oneTimeAmount,
+        month_index: Number(oneTimeMonth)
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not run one-time inflow scenario");
+    } finally {
+      setScenarioLoading(false);
     }
   }
 
@@ -1599,7 +1631,7 @@ function ScenarioPanel({
   const scenarioFirst = scenario?.scenario.goals[0];
 
   return (
-    <section id="scenario" className="panel" aria-busy={status.loading}>
+    <section id="scenario" className="panel" aria-busy={status.loading || scenarioLoading}>
       <div className="panel-header">
         <div>
           <p className="eyebrow">Scenario</p>
@@ -1608,6 +1640,7 @@ function ScenarioPanel({
         <SlidersHorizontal size={22} />
       </div>
       <PanelNotice status={status} loadingText="Loading scenario inputs..." />
+      <PanelNotice status={{ loading: scenarioLoading, error: null }} loadingText="Running scenario..." />
       <form className="scenario-form" onSubmit={submit}>
         <label>
           Monthly savings amount
@@ -1621,7 +1654,34 @@ function ScenarioPanel({
             required
           />
         </label>
-        <button className="primary-button" type="submit"><SlidersHorizontal size={17} /> Run scenario</button>
+        <button className="primary-button" type="submit" disabled={scenarioLoading}><SlidersHorizontal size={17} /> Run scenario</button>
+      </form>
+      <form className="scenario-form one-time-form" onSubmit={submitOneTimeInflow}>
+        <label>
+          One-time inflow
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={oneTimeAmount}
+            placeholder="500"
+            onChange={(event) => setOneTimeAmount(event.target.value)}
+            required
+          />
+        </label>
+        <label>
+          Month
+          <input
+            type="number"
+            min="1"
+            max="600"
+            step="1"
+            value={oneTimeMonth}
+            onChange={(event) => setOneTimeMonth(event.target.value)}
+            required
+          />
+        </label>
+        <button className="primary-button" type="submit" disabled={scenarioLoading}><Plus size={17} /> Run inflow</button>
       </form>
       {error && <div className="inline-error" role="alert">{error}</div>}
       {!scenario && <EmptyState text="Run a scenario to compare projected dates." />}

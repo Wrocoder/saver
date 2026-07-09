@@ -428,6 +428,10 @@ select:focus-visible {
   margin-bottom: 14px;
 }
 
+.scenario-form.one-time-form {
+  grid-template-columns: minmax(150px, 1fr) 110px auto;
+}
+
 .scenario-form label {
   display: grid;
   gap: 7px;
