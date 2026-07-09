@@ -85,6 +85,21 @@ export type ScenarioResponse = {
   scenario: Plan;
 };
 
+export type ScenarioPreset = {
+  name: string;
+  label: string;
+  description: string;
+  assumptions: string[];
+  monthly_available_amount: string;
+  skipped_months: number[];
+  plan: Plan;
+};
+
+export type ScenarioPresetsResponse = {
+  base: Plan;
+  presets: ScenarioPreset[];
+};
+
 export type AllocationStrategySettings = {
   type: "strict_priority" | "proportional" | "nearest_deadline" | "smallest_goal_first" | "custom";
   weights: Record<string, string>;

@@ -66,6 +66,7 @@ import {
   NotificationSettings,
   Plan,
   RecurringRule,
+  ScenarioPresetsResponse,
   ScenarioResponse,
   trackEvent,
   User
@@ -1576,6 +1577,7 @@ function ScenarioPanel({
   const [skipStartMonth, setSkipStartMonth] = useState("1");
   const [skipMonthCount, setSkipMonthCount] = useState("1");
   const [scenario, setScenario] = useState<ScenarioResponse | null>(null);
+  const [presets, setPresets] = useState<ScenarioPresetsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [scenarioLoading, setScenarioLoading] = useState(false);
 
@@ -1592,6 +1594,7 @@ function ScenarioPanel({
         })
       });
       setScenario(result);
+      setPresets(null);
       void trackEvent(token, "scenario_run", {
         scenario_name: result.scenario_name,
         monthly_available_amount: amount
@@ -1617,6 +1620,7 @@ function ScenarioPanel({
         })
       });
       setScenario(result);
+      setPresets(null);
       void trackEvent(token, "scenario_run", {
         scenario_name: result.scenario_name,
         one_time_amount: oneTimeAmount,
@@ -1643,6 +1647,7 @@ function ScenarioPanel({
         })
       });
       setScenario(result);
+      setPresets(null);
       void trackEvent(token, "scenario_run", {
         scenario_name: result.scenario_name,
         start_month: Number(skipStartMonth),
@@ -1655,8 +1660,27 @@ function ScenarioPanel({
     }
   }
 
+  async function runPresets() {
+    setScenarioLoading(true);
+    setError(null);
+    try {
+      const result = await apiRequest<ScenarioPresetsResponse>("/api/scenarios/presets", token);
+      setPresets(result);
+      setScenario(null);
+      void trackEvent(token, "scenario_run", {
+        scenario_name: "scenario_presets",
+        preset_count: result.presets.length
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not run scenario presets");
+    } finally {
+      setScenarioLoading(false);
+    }
+  }
+
   const baseFirst = scenario?.base.goals[0];
   const scenarioFirst = scenario?.scenario.goals[0];
+  const scenarioCurrency = summary?.base_currency ?? plan?.goals[0]?.currency ?? "USD";
 
   return (
     <section id="scenario" className="panel" aria-busy={status.loading || scenarioLoading}>
@@ -1738,8 +1762,13 @@ function ScenarioPanel({
         </label>
         <button className="primary-button" type="submit" disabled={scenarioLoading}><CalendarClock size={17} /> Run skip</button>
       </form>
+      <div className="scenario-actions">
+        <button className="secondary-button" type="button" onClick={() => void runPresets()} disabled={scenarioLoading}>
+          <BarChart3 size={17} /> Run presets
+        </button>
+      </div>
       {error && <div className="inline-error" role="alert">{error}</div>}
-      {!scenario && <EmptyState text="Run a scenario to compare projected dates." />}
+      {!scenario && !presets && <EmptyState text="Run a scenario to compare projected dates." />}
       {scenario && (
         <div className="scenario-result">
           <div>
@@ -1752,6 +1781,39 @@ function ScenarioPanel({
             <strong>{scenarioFirst?.title ?? "No goal"}</strong>
             <small>{scenarioFirst?.expected_completion_date ?? "No date"}</small>
           </div>
+        </div>
+      )}
+      {presets && (
+        <div className="preset-scenarios-grid">
+          {presets.presets.map((preset) => {
+            const firstGoal = preset.plan.goals[0];
+            return (
+              <article className="preset-scenario-card" key={preset.name}>
+                <div className="preset-card-header">
+                  <div>
+                    <strong>{preset.label}</strong>
+                    <span>{preset.description}</span>
+                  </div>
+                  <small>{formatMoney(preset.monthly_available_amount, scenarioCurrency)}</small>
+                </div>
+                <div className="preset-card-metrics">
+                  <div>
+                    <span>First goal</span>
+                    <strong>{firstGoal?.title ?? "No goal"}</strong>
+                  </div>
+                  <div>
+                    <span>Date</span>
+                    <strong>{firstGoal?.expected_completion_date ?? "No date"}</strong>
+                  </div>
+                </div>
+                <div className="preset-assumptions">
+                  {preset.assumptions.map((assumption) => (
+                    <span key={assumption}>{assumption}</span>
+                  ))}
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
     </section>

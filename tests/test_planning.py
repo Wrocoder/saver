@@ -7,7 +7,7 @@ from app.domain.models import (
     DeadlineType,
     FinancialGoal,
 )
-from app.domain.planning import build_financial_plan
+from app.domain.planning import build_financial_plan, build_scenario_presets
 
 
 def test_single_goal_expected_completion_with_monthly_amount() -> None:
@@ -299,6 +299,35 @@ def test_skipping_first_month_sets_first_month_allocation_to_zero() -> None:
     assert plan.goals[0].allocated_first_month == Decimal("0")
     assert plan.goals[0].expected_completion_date == date(2026, 10, 1)
     assert plan.goals[0].status == "on_track"
+
+
+def test_scenario_presets_create_cautious_realistic_and_optimistic_plans() -> None:
+    goal = FinancialGoal(
+        title="Bike",
+        target_amount=Decimal("1000"),
+        current_amount=Decimal("0"),
+    )
+
+    presets = build_scenario_presets(
+        goals=[goal],
+        monthly_available_amount=Decimal("100"),
+        strategy=AllocationStrategy(type=AllocationStrategyType.STRICT_PRIORITY),
+        today=date(2026, 7, 1),
+    )
+
+    assert [preset.name for preset in presets] == ["cautious", "realistic", "optimistic"]
+    assert [preset.monthly_available_amount for preset in presets] == [
+        Decimal("80.00"),
+        Decimal("100.00"),
+        Decimal("120.00"),
+    ]
+    cautious, realistic, optimistic = presets
+    assert cautious.skipped_months == [4, 8, 12]
+    assert cautious.plan.monthly_schedule[3].month_index == 5
+    assert realistic.skipped_months == []
+    assert optimistic.skipped_months == []
+    assert cautious.plan.goals[0].expected_completion_date > realistic.plan.goals[0].expected_completion_date
+    assert optimistic.plan.goals[0].expected_completion_date < realistic.plan.goals[0].expected_completion_date
 
 
 def test_hard_deadline_is_marked_at_risk_when_projection_is_late() -> None:

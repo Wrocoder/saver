@@ -51,6 +51,16 @@ class FinancialPlanResult(BaseModel):
     recommendations: list[str]
 
 
+class ScenarioPresetPlan(BaseModel):
+    name: str
+    label: str
+    description: str
+    assumptions: list[str]
+    monthly_available_amount: Decimal
+    skipped_months: list[int]
+    plan: FinancialPlanResult
+
+
 def build_financial_plan(
     goals: list[FinancialGoal],
     monthly_available_amount: Decimal,
@@ -100,6 +110,79 @@ def build_financial_plan(
         conflicts=conflicts,
         recommendations=recommendations,
     )
+
+
+def build_scenario_presets(
+    goals: list[FinancialGoal],
+    monthly_available_amount: Decimal,
+    strategy: AllocationStrategy,
+    today: date | None = None,
+) -> list[ScenarioPresetPlan]:
+    today = today or date.today()
+    configs = [
+        {
+            "name": "cautious",
+            "label": "Cautious",
+            "description": "Lower capacity with several missed contribution months.",
+            "multiplier": Decimal("0.80"),
+            "skipped_months": [4, 8, 12],
+            "assumptions": [
+                "Monthly savings capacity is reduced to 80% of the current plan.",
+                "Regular funding is skipped in months 4, 8, and 12.",
+            ],
+        },
+        {
+            "name": "realistic",
+            "label": "Realistic",
+            "description": "Current plan without additional shocks or bonuses.",
+            "multiplier": Decimal("1.00"),
+            "skipped_months": [],
+            "assumptions": [
+                "Current effective monthly savings capacity is used.",
+                "No extra skipped months or one-time inflows are applied.",
+            ],
+        },
+        {
+            "name": "optimistic",
+            "label": "Optimistic",
+            "description": "Higher capacity if income or savings discipline improves.",
+            "multiplier": Decimal("1.20"),
+            "skipped_months": [],
+            "assumptions": [
+                "Monthly savings capacity is increased to 120% of the current plan.",
+                "No skipped contribution months are applied.",
+            ],
+        },
+    ]
+
+    presets: list[ScenarioPresetPlan] = []
+    for config in configs:
+        amount = scale_monthly_amount(monthly_available_amount, config["multiplier"])
+        skipped_months = list(config["skipped_months"])
+        plan = build_financial_plan(
+            goals=goals,
+            monthly_available_amount=amount,
+            strategy=strategy,
+            today=today,
+            skipped_months=set(skipped_months),
+        )
+        presets.append(
+            ScenarioPresetPlan(
+                name=str(config["name"]),
+                label=str(config["label"]),
+                description=str(config["description"]),
+                assumptions=list(config["assumptions"]),
+                monthly_available_amount=amount,
+                skipped_months=skipped_months,
+                plan=plan,
+            )
+        )
+
+    return presets
+
+
+def scale_monthly_amount(monthly_available_amount: Decimal, multiplier: Decimal) -> Decimal:
+    return (monthly_available_amount * multiplier).quantize(Decimal("0.01"))
 
 
 def simulate_allocation(

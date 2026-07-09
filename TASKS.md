@@ -87,7 +87,7 @@
 - [x] Поддержать custom fixed amount allocation.
 - [x] Добавить моделирование разовых поступлений.
 - [x] Добавить моделирование пропущенных месяцев.
-- [ ] Добавить cautious / realistic / optimistic scenario presets.
+- [x] Добавить cautious / realistic / optimistic scenario presets.
 - [ ] Добавить вероятность достижения цели в срок на основе сценариев.
 - [ ] Добавить explainability payload: какие входные данные повлияли на дату цели.
 - [ ] Добавить предупреждения о конфликтующих целях.

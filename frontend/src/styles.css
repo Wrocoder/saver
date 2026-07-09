@@ -444,6 +444,12 @@ select:focus-visible {
   font-size: 13px;
 }
 
+.scenario-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 14px;
+}
+
 .allocation-form {
   display: grid;
   gap: 14px;
@@ -1217,6 +1223,60 @@ select:focus {
   background: #f6f8f7;
 }
 
+.preset-scenarios-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.preset-scenario-card {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #d9e4df;
+  border-radius: 8px;
+  padding: 14px;
+  background: #f9fbfa;
+}
+
+.preset-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.preset-card-header div,
+.preset-card-metrics > div,
+.preset-assumptions {
+  display: grid;
+  gap: 4px;
+}
+
+.preset-card-header strong,
+.preset-card-metrics strong {
+  color: #17251f;
+}
+
+.preset-card-header span,
+.preset-card-header small,
+.preset-card-metrics span,
+.preset-assumptions span {
+  color: #66766f;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.preset-card-header small {
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.preset-card-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
 .monthly-plan-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 180px;
@@ -1582,6 +1642,7 @@ select:focus {
   .report-grid,
   .analytics-grid,
   .monthly-calendar,
+  .preset-scenarios-grid,
   .planned-actual-summary,
   .goal-detail-grid {
     grid-template-columns: 1fr 1fr;
@@ -1692,6 +1753,7 @@ select:focus {
   .analytics-grid,
   .monthly-calendar,
   .monthly-plan-toolbar,
+  .preset-scenarios-grid,
   .planned-actual-summary,
   .planned-actual-row,
   .csv-actions,

@@ -253,6 +253,27 @@ def test_skipped_months_scenario_removes_regular_funding_for_period(client: Test
     assert payload["scenario"]["goals"][0]["expected_completion_date"] > payload["base"]["goals"][0]["expected_completion_date"]
 
 
+def test_scenario_presets_endpoint_returns_three_named_scenarios(client: TestClient) -> None:
+    client.post(
+        "/api/goals",
+        json={"title": "Car", "target_amount": "1000", "currency": "USD", "priority": 1},
+    )
+
+    response = client.get("/api/scenarios/presets")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [preset["name"] for preset in payload["presets"]] == ["cautious", "realistic", "optimistic"]
+    assert [Decimal(preset["monthly_available_amount"]) for preset in payload["presets"]] == [
+        Decimal("240.00"),
+        Decimal("300.00"),
+        Decimal("360.00"),
+    ]
+    assert payload["presets"][0]["skipped_months"] == [4, 8, 12]
+    assert payload["presets"][1]["plan"]["goals"][0]["expected_completion_date"] == payload["base"]["goals"][0]["expected_completion_date"]
+    assert payload["presets"][2]["plan"]["goals"][0]["expected_completion_date"] < payload["base"]["goals"][0]["expected_completion_date"]
+
+
 def test_goal_ownership_is_scoped_by_user_header(client: TestClient) -> None:
     first_user = client.post(
         "/api/users",

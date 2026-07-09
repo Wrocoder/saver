@@ -185,6 +185,21 @@ class ScenarioResponse(BaseModel):
     scenario: FinancialPlanResult
 
 
+class ScenarioPresetResponse(BaseModel):
+    name: str
+    label: str
+    description: str
+    assumptions: list[str]
+    monthly_available_amount: Decimal
+    skipped_months: list[int]
+    plan: FinancialPlanResult
+
+
+class ScenarioPresetsResponse(BaseModel):
+    base: FinancialPlanResult
+    presets: list[ScenarioPresetResponse]
+
+
 class UserCreate(BaseModel):
     email: str = Field(min_length=3, max_length=255)
     name: str | None = Field(default=None, max_length=120)

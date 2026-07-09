@@ -22,6 +22,7 @@ from app.api.schemas import (
     OneTimeInflowScenarioRequest,
     PlanResponse,
     PriorityUpdate,
+    ScenarioPresetsResponse,
     ScenarioRequest,
     ScenarioResponse,
     SkippedMonthsScenarioRequest,
@@ -40,7 +41,7 @@ from app.domain.models import (
     FinancialGoal,
     GoalContribution,
 )
-from app.domain.planning import build_financial_plan
+from app.domain.planning import build_financial_plan, build_scenario_presets
 from app.repositories.sqlalchemy import GoalsRepository
 from app.repositories.finance import FinanceRepository
 from app.services.auth import delete_user_account
@@ -400,6 +401,34 @@ def simulate_skipped_months(
         scenario_name=payload.scenario_name,
         base=base_plan,
         scenario=scenario_plan,
+    )
+
+
+@router.get("/scenarios/presets", response_model=ScenarioPresetsResponse)
+def get_scenario_presets(
+    repo: GoalsRepository = Depends(get_repository),
+    finance_repo: FinanceRepository = Depends(get_finance_repository),
+) -> ScenarioPresetsResponse:
+    settings = repo.get_plan_settings()
+    summary = finance_repo.build_summary()
+    goals, currency_conflicts = repo.list_goals_for_planning_with_warnings()
+    base_plan = build_financial_plan(
+        goals=goals,
+        monthly_available_amount=summary.effective_monthly_available_amount,
+        strategy=settings.strategy,
+    )
+    base_plan.conflicts = [*currency_conflicts, *base_plan.conflicts]
+    presets = build_scenario_presets(
+        goals=goals,
+        monthly_available_amount=summary.effective_monthly_available_amount,
+        strategy=settings.strategy,
+    )
+    for preset in presets:
+        preset.plan.conflicts = [*currency_conflicts, *preset.plan.conflicts]
+
+    return ScenarioPresetsResponse(
+        base=base_plan,
+        presets=[preset.model_dump() for preset in presets],
     )
 
 
