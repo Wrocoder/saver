@@ -162,6 +162,103 @@ def test_smallest_goal_first_strategy_funds_lowest_remaining_amount_first() -> N
     assert plan.monthly_schedule[2].allocations == {car.id: Decimal("300")}
 
 
+def test_custom_strategy_uses_fixed_amounts_per_goal() -> None:
+    emergency_fund = FinancialGoal(
+        title="Emergency fund",
+        target_amount=Decimal("1000"),
+        current_amount=Decimal("100"),
+        priority=1,
+    )
+    trip = FinancialGoal(
+        title="Trip",
+        target_amount=Decimal("800"),
+        current_amount=Decimal("0"),
+        priority=2,
+    )
+
+    plan = build_financial_plan(
+        goals=[trip, emergency_fund],
+        monthly_available_amount=Decimal("300"),
+        strategy=AllocationStrategy(
+            type=AllocationStrategyType.CUSTOM,
+            fixed_amounts={
+                emergency_fund.id: Decimal("200"),
+                trip.id: Decimal("80"),
+            },
+        ),
+        today=date(2026, 7, 1),
+    )
+
+    assert plan.monthly_schedule[0].allocations == {
+        emergency_fund.id: Decimal("200"),
+        trip.id: Decimal("80"),
+    }
+    assert plan.monthly_schedule[4].allocations == {
+        emergency_fund.id: Decimal("100"),
+        trip.id: Decimal("80"),
+    }
+    assert plan.monthly_schedule[5].allocations == {trip.id: Decimal("80")}
+    projections = {projection.title: projection for projection in plan.goals}
+    assert projections["Emergency fund"].expected_completion_date == date(2026, 12, 1)
+    assert projections["Trip"].expected_completion_date == date(2027, 5, 1)
+
+
+def test_one_time_inflow_accelerates_goal_schedule() -> None:
+    phone = FinancialGoal(
+        title="Phone",
+        target_amount=Decimal("500"),
+        current_amount=Decimal("200"),
+        priority=1,
+    )
+    trip = FinancialGoal(
+        title="Trip",
+        target_amount=Decimal("400"),
+        current_amount=Decimal("0"),
+        priority=2,
+    )
+
+    plan = build_financial_plan(
+        goals=[trip, phone],
+        monthly_available_amount=Decimal("100"),
+        strategy=AllocationStrategy(type=AllocationStrategyType.STRICT_PRIORITY),
+        today=date(2026, 7, 1),
+        one_time_inflows={2: Decimal("300")},
+    )
+
+    assert plan.monthly_schedule[0].allocations == {phone.id: Decimal("100")}
+    assert plan.monthly_schedule[1].allocations == {
+        phone.id: Decimal("200"),
+        trip.id: Decimal("200"),
+    }
+    projections = {projection.title: projection for projection in plan.goals}
+    assert projections["Phone"].expected_completion_date == date(2026, 9, 1)
+    assert projections["Trip"].expected_completion_date == date(2026, 11, 1)
+
+
+def test_one_time_inflow_can_fund_goal_without_monthly_amount() -> None:
+    goal = FinancialGoal(
+        title="Laptop",
+        target_amount=Decimal("250"),
+        current_amount=Decimal("0"),
+    )
+
+    plan = build_financial_plan(
+        goals=[goal],
+        monthly_available_amount=Decimal("0"),
+        strategy=AllocationStrategy(type=AllocationStrategyType.STRICT_PRIORITY),
+        today=date(2026, 7, 1),
+        one_time_inflows={2: Decimal("250")},
+    )
+
+    projection = plan.goals[0]
+    assert plan.monthly_schedule[0].month_index == 2
+    assert plan.monthly_schedule[0].allocations == {goal.id: Decimal("250")}
+    assert projection.allocated_first_month == Decimal("0")
+    assert projection.expected_completion_date == date(2026, 9, 1)
+    assert projection.status == "on_track"
+    assert plan.conflicts == []
+
+
 def test_hard_deadline_is_marked_at_risk_when_projection_is_late() -> None:
     goal = FinancialGoal(
         title="Tuition",

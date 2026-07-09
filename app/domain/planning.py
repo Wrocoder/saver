@@ -56,6 +56,7 @@ def build_financial_plan(
     monthly_available_amount: Decimal,
     strategy: AllocationStrategy,
     today: date | None = None,
+    one_time_inflows: dict[int, Decimal] | None = None,
 ) -> FinancialPlanResult:
     today = today or date.today()
     active_goals = [
@@ -70,11 +71,11 @@ def build_financial_plan(
         monthly_available_amount,
         strategy,
         today,
+        one_time_inflows=one_time_inflows,
     )
 
-    first_month_allocations = (
-        monthly_schedule[0].allocations if monthly_schedule else {}
-    )
+    first_month = next((period for period in monthly_schedule if period.month_index == 1), None)
+    first_month_allocations = first_month.allocations if first_month else {}
 
     projections = [
         build_goal_projection(
@@ -104,8 +105,14 @@ def simulate_allocation(
     monthly_available_amount: Decimal,
     strategy: AllocationStrategy,
     today: date,
+    one_time_inflows: dict[int, Decimal] | None = None,
 ) -> tuple[list[MonthlyAllocation], dict[str, date]]:
-    if monthly_available_amount <= 0:
+    positive_one_time_inflows = {
+        month_index: amount
+        for month_index, amount in (one_time_inflows or {}).items()
+        if month_index >= 1 and amount > 0
+    }
+    if monthly_available_amount <= 0 and not positive_one_time_inflows:
         return [], {}
 
     remaining = {goal.id: goal.remaining_amount() for goal in goals}
@@ -121,14 +128,22 @@ def simulate_allocation(
         if not unfinished_goals:
             break
 
+        available_amount = monthly_available_amount + positive_one_time_inflows.get(month_index, Decimal("0"))
+        if available_amount <= 0:
+            if has_future_funding(month_index, monthly_available_amount, positive_one_time_inflows):
+                continue
+            break
+
         allocations = allocate_period(
             unfinished_goals,
             remaining,
-            monthly_available_amount,
+            available_amount,
             strategy,
         )
 
         if not any(amount > 0 for amount in allocations.values()):
+            if has_future_funding(month_index, monthly_available_amount, positive_one_time_inflows):
+                continue
             break
 
         period_date = add_months(today, month_index)
@@ -147,6 +162,16 @@ def simulate_allocation(
         )
 
     return schedule, completion_dates
+
+
+def has_future_funding(
+    month_index: int,
+    monthly_available_amount: Decimal,
+    one_time_inflows: dict[int, Decimal],
+) -> bool:
+    if monthly_available_amount > 0:
+        return True
+    return any(future_month > month_index and amount > 0 for future_month, amount in one_time_inflows.items())
 
 
 def allocate_period(
@@ -342,7 +367,9 @@ def detect_conflicts(
 ) -> list[str]:
     conflicts: list[str] = []
 
-    if monthly_available_amount <= 0 and any(goal.remaining_amount > 0 for goal in projections):
+    if monthly_available_amount <= 0 and any(
+        goal.remaining_amount > 0 and goal.expected_completion_date is None for goal in projections
+    ):
         conflicts.append("No monthly amount is available for active goals.")
 
     for projection in projections:

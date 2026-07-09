@@ -19,6 +19,7 @@ from app.api.schemas import (
     GoalPriceHistoryResponse,
     GoalResponse,
     GoalUpdate,
+    OneTimeInflowScenarioRequest,
     PlanResponse,
     PriorityUpdate,
     ScenarioRequest,
@@ -295,6 +296,8 @@ def update_strategy(
     )
     if strategy.type == AllocationStrategyType.PROPORTIONAL:
         validate_proportional_weights(strategy, repo)
+    if strategy.type == AllocationStrategyType.CUSTOM:
+        validate_custom_fixed_amounts(strategy, repo)
     settings = repo.update_strategy(strategy)
     summary = finance_repo.build_summary()
     return build_plan_response(summary.effective_monthly_available_amount, settings.strategy, repo)
@@ -340,6 +343,35 @@ def simulate_monthly_amount(
     )
 
 
+@router.post("/scenarios/one-time-inflow", response_model=ScenarioResponse)
+def simulate_one_time_inflow(
+    payload: OneTimeInflowScenarioRequest,
+    repo: GoalsRepository = Depends(get_repository),
+    finance_repo: FinanceRepository = Depends(get_finance_repository),
+) -> ScenarioResponse:
+    settings = repo.get_plan_settings()
+    summary = finance_repo.build_summary()
+    goals, currency_conflicts = repo.list_goals_for_planning_with_warnings()
+    base_plan = build_financial_plan(
+        goals=goals,
+        monthly_available_amount=summary.effective_monthly_available_amount,
+        strategy=settings.strategy,
+    )
+    base_plan.conflicts = [*currency_conflicts, *base_plan.conflicts]
+    scenario_plan = build_financial_plan(
+        goals=goals,
+        monthly_available_amount=summary.effective_monthly_available_amount,
+        strategy=settings.strategy,
+        one_time_inflows={payload.month_index: payload.amount},
+    )
+    scenario_plan.conflicts = [*currency_conflicts, *scenario_plan.conflicts]
+    return ScenarioResponse(
+        scenario_name=payload.scenario_name,
+        base=base_plan,
+        scenario=scenario_plan,
+    )
+
+
 def build_plan_response(
     monthly_available_amount: Decimal,
     strategy: AllocationStrategy,
@@ -347,6 +379,8 @@ def build_plan_response(
 ) -> PlanResponse:
     if strategy.type == AllocationStrategyType.PROPORTIONAL:
         validate_proportional_weights(strategy, repo)
+    if strategy.type == AllocationStrategyType.CUSTOM:
+        validate_custom_fixed_amounts(strategy, repo)
 
     goals, currency_conflicts = repo.list_goals_for_planning_with_warnings()
 
@@ -368,4 +402,26 @@ def validate_proportional_weights(strategy: AllocationStrategy, repo: GoalsRepos
         raise HTTPException(
             status_code=400,
             detail=f"Unknown goal ids in weights: {sorted(unknown_goal_ids)}",
+        )
+
+
+def validate_custom_fixed_amounts(strategy: AllocationStrategy, repo: GoalsRepository) -> None:
+    if not strategy.fixed_amounts:
+        return
+
+    goal_ids = {goal.id for goal in repo.list_goals()}
+    unknown_goal_ids = set(strategy.fixed_amounts) - goal_ids
+    if unknown_goal_ids:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown goal ids in fixed_amounts: {sorted(unknown_goal_ids)}",
+        )
+
+    negative_goal_ids = [
+        goal_id for goal_id, amount in strategy.fixed_amounts.items() if amount < 0
+    ]
+    if negative_goal_ids:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Negative fixed amounts are not allowed: {sorted(negative_goal_ids)}",
         )
