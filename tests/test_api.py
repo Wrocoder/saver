@@ -296,6 +296,31 @@ def test_plan_probability_is_based_on_scenario_presets(client: TestClient) -> No
     assert payload["goals"][0]["probability"] == "medium"
 
 
+def test_plan_goal_contains_explainability_payload(client: TestClient) -> None:
+    client.post(
+        "/api/goals",
+        json={
+            "title": "Laptop",
+            "target_amount": "1000",
+            "current_amount": "250",
+            "currency": "USD",
+            "priority": 2,
+        },
+    )
+
+    response = client.get("/api/plan")
+
+    assert response.status_code == 200
+    goal = response.json()["goals"][0]
+    factors = {factor["key"]: factor for factor in goal["explainability"]["factors"]}
+    assert factors["target_amount"]["value"] == "1000"
+    assert factors["current_amount"]["value"] == "250"
+    assert factors["remaining_amount"]["value"] == "750"
+    assert factors["monthly_available_amount"]["value"] == "300"
+    assert factors["allocation_strategy"]["value"] == "strict_priority"
+    assert goal["explainability"]["assumptions"]
+
+
 def test_goal_ownership_is_scoped_by_user_header(client: TestClient) -> None:
     first_user = client.post(
         "/api/users",

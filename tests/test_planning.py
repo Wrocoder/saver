@@ -370,6 +370,36 @@ def test_scenario_probability_is_low_when_only_optimistic_preset_hits_deadline()
     assert plan.goals[0].probability == "low"
 
 
+def test_goal_projection_includes_explainability_payload() -> None:
+    goal = FinancialGoal(
+        title="Laptop",
+        target_amount=Decimal("1000"),
+        current_amount=Decimal("250"),
+        desired_date=date(2026, 12, 1),
+        priority=2,
+    )
+
+    plan = build_financial_plan_with_scenario_probability(
+        goals=[goal],
+        monthly_available_amount=Decimal("300"),
+        strategy=AllocationStrategy(type=AllocationStrategyType.STRICT_PRIORITY),
+        today=date(2026, 7, 1),
+    )
+
+    explainability = plan.goals[0].explainability
+    factors = {factor.key: factor for factor in explainability.factors}
+    assert factors["target_amount"].value == "1000"
+    assert factors["current_amount"].value == "250"
+    assert factors["remaining_amount"].value == "750"
+    assert factors["monthly_available_amount"].value == "300"
+    assert factors["allocation_strategy"].value == "strict_priority"
+    assert factors["priority"].value == "2"
+    assert factors["desired_date"].value == "2026-12-01"
+    assert factors["expected_completion_date"].value == "2026-10-01"
+    assert "preset scenarios" in factors["scenario_probability"].impact
+    assert "monthly allocation periods" in explainability.assumptions[0]
+
+
 def test_hard_deadline_is_marked_at_risk_when_projection_is_late() -> None:
     goal = FinancialGoal(
         title="Tuition",

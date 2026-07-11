@@ -632,6 +632,58 @@ select:focus {
   padding-left: 10px;
 }
 
+.explainability-panel {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #dce6e1;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f8faf9;
+}
+
+.explainability-panel > strong {
+  color: #183027;
+  font-size: 13px;
+}
+
+.explainability-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.explainability-factor {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.explainability-factor span,
+.explainability-factor small,
+.explainability-assumptions span {
+  color: #64746d;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.explainability-factor strong {
+  color: #183027;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.explainability-assumptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.explainability-assumptions span {
+  border-radius: 999px;
+  background: #edf1ef;
+  padding: 5px 8px;
+}
+
 .goal-detail-meta {
   display: flex;
   gap: 10px;
@@ -1654,7 +1706,8 @@ select:focus {
   .monthly-calendar,
   .preset-scenarios-grid,
   .planned-actual-summary,
-  .goal-detail-grid {
+  .goal-detail-grid,
+  .explainability-grid {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -1770,6 +1823,7 @@ select:focus {
   .csv-import-row,
   .csv-period-row,
   .goal-detail-grid,
+  .explainability-grid,
   .compact-form,
   .cashflow-form,
   .contribution-form,

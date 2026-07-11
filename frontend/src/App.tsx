@@ -1085,6 +1085,25 @@ function GoalPanel({
                     <DetailMetric label="Importance" value={`${goal.importance}/5`} />
                   </div>
                   {projection?.explanation && <div className="goal-detail-note">{projection.explanation}</div>}
+                  {projection?.explainability && (
+                    <div className="explainability-panel">
+                      <strong>Date drivers</strong>
+                      <div className="explainability-grid">
+                        {projection.explainability.factors.slice(0, 8).map((factor) => (
+                          <div className="explainability-factor" key={factor.key}>
+                            <span>{factor.label}</span>
+                            <strong>{factor.value}</strong>
+                            <small>{factor.impact}</small>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="explainability-assumptions">
+                        {projection.explainability.assumptions.map((assumption) => (
+                          <span key={assumption}>{assumption}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {(goal.category || goal.description || goal.notes || goal.product_url || goal.expected_purchase_date) && (
                     <div className="goal-detail-meta">
                       {goal.category && <span>{goal.category}</span>}

@@ -21,6 +21,18 @@ class MonthlyAllocation(BaseModel):
     allocations: dict[str, Decimal]
 
 
+class ProjectionFactor(BaseModel):
+    key: str
+    label: str
+    value: str
+    impact: str
+
+
+class ProjectionExplainability(BaseModel):
+    factors: list[ProjectionFactor]
+    assumptions: list[str]
+
+
 class GoalProjection(BaseModel):
     goal_id: str
     title: str
@@ -39,6 +51,7 @@ class GoalProjection(BaseModel):
     deadline_type: DeadlineType
     probability: str
     explanation: str
+    explainability: ProjectionExplainability
 
 
 class FinancialPlanResult(BaseModel):
@@ -96,6 +109,8 @@ def build_financial_plan(
             allocated_first_month=first_month_allocations.get(goal.id, Decimal("0")),
             expected_completion_date=completion_dates.get(goal.id),
             today=today,
+            monthly_available_amount=monthly_available_amount,
+            strategy_type=strategy.type,
             scenario_completion_dates=(
                 scenario_completion_dates.get(goal.id)
                 if scenario_completion_dates is not None
@@ -452,6 +467,8 @@ def build_goal_projection(
     allocated_first_month: Decimal,
     expected_completion_date: date | None,
     today: date,
+    monthly_available_amount: Decimal,
+    strategy_type: AllocationStrategyType,
     scenario_completion_dates: list[date | None] | None = None,
 ) -> GoalProjection:
     remaining = goal.remaining_amount()
@@ -475,6 +492,17 @@ def build_goal_projection(
     if probability is None:
         probability = probability_label(allocated_first_month, required_monthly, remaining)
     explanation = explain_projection(goal, expected_completion_date, deviation_days, status)
+    explainability = build_projection_explainability(
+        goal=goal,
+        remaining=remaining,
+        allocated_first_month=allocated_first_month,
+        required_monthly=required_monthly,
+        expected_completion_date=expected_completion_date,
+        monthly_available_amount=monthly_available_amount,
+        strategy_type=strategy_type,
+        probability=probability,
+        scenario_completion_dates=scenario_completion_dates,
+    )
 
     return GoalProjection(
         goal_id=goal.id,
@@ -494,6 +522,7 @@ def build_goal_projection(
         deadline_type=goal.deadline_type,
         probability=probability,
         explanation=explanation,
+        explainability=explainability,
     )
 
 
@@ -556,6 +585,131 @@ def scenario_probability_label(
     if successful_scenarios >= 2:
         return "medium"
     return "low"
+
+
+def build_projection_explainability(
+    goal: FinancialGoal,
+    remaining: Decimal,
+    allocated_first_month: Decimal,
+    required_monthly: Decimal | None,
+    expected_completion_date: date | None,
+    monthly_available_amount: Decimal,
+    strategy_type: AllocationStrategyType,
+    probability: str,
+    scenario_completion_dates: list[date | None] | None,
+) -> ProjectionExplainability:
+    factors = [
+        ProjectionFactor(
+            key="target_amount",
+            label="Target amount",
+            value=format_decimal(goal.target_amount),
+            impact="Sets the total amount that must be funded.",
+        ),
+        ProjectionFactor(
+            key="current_amount",
+            label="Current amount",
+            value=format_decimal(goal.current_amount),
+            impact="Reduces the amount still needed.",
+        ),
+        ProjectionFactor(
+            key="remaining_amount",
+            label="Remaining amount",
+            value=format_decimal(remaining),
+            impact="Drives how many allocation periods are needed.",
+        ),
+        ProjectionFactor(
+            key="monthly_available_amount",
+            label="Monthly available amount",
+            value=format_decimal(monthly_available_amount),
+            impact="Caps how much can be distributed across active goals each month.",
+        ),
+        ProjectionFactor(
+            key="allocation_strategy",
+            label="Allocation strategy",
+            value=strategy_type.value,
+            impact="Controls how the monthly amount is split between goals.",
+        ),
+        ProjectionFactor(
+            key="priority",
+            label="Priority",
+            value=str(goal.priority),
+            impact="Affects funding order for priority-based strategies.",
+        ),
+        ProjectionFactor(
+            key="first_month_allocation",
+            label="First month allocation",
+            value=format_decimal(allocated_first_month),
+            impact="Shows the current plan's immediate funding for this goal.",
+        ),
+        ProjectionFactor(
+            key="desired_date",
+            label="Desired date",
+            value=goal.desired_date.isoformat() if goal.desired_date else "not set",
+            impact=(
+                "Used for deadline status and scenario probability."
+                if goal.desired_date
+                else "No deadline is set, so deadline probability remains unknown."
+            ),
+        ),
+        ProjectionFactor(
+            key="deadline_type",
+            label="Deadline type",
+            value=goal.deadline_type.value,
+            impact="Controls whether a late projection is marked at risk or adjustable.",
+        ),
+        ProjectionFactor(
+            key="required_monthly_amount",
+            label="Required monthly amount",
+            value=format_decimal(required_monthly) if required_monthly is not None else "not available",
+            impact="Compares the required pace with the projected funding pace.",
+        ),
+        ProjectionFactor(
+            key="expected_completion_date",
+            label="Projected date",
+            value=expected_completion_date.isoformat() if expected_completion_date else "not projected",
+            impact="Result after applying strategy, current progress, and available funding.",
+        ),
+        ProjectionFactor(
+            key="scenario_probability",
+            label="Scenario probability",
+            value=probability,
+            impact=scenario_probability_impact(goal, scenario_completion_dates),
+        ),
+    ]
+
+    assumptions = [
+        "Projection uses monthly allocation periods.",
+        "Goal amounts are evaluated in the goal currency after repository-level conversion when needed.",
+        "Scenario probability compares cautious, realistic, and optimistic preset completion dates against the desired date.",
+    ]
+    if scenario_completion_dates is None:
+        assumptions[-1] = "Fallback probability compares first-month allocation with required monthly funding."
+
+    return ProjectionExplainability(factors=factors, assumptions=assumptions)
+
+
+def scenario_probability_impact(
+    goal: FinancialGoal,
+    scenario_completion_dates: list[date | None] | None,
+) -> str:
+    if scenario_completion_dates is None:
+        return "Uses the simple first-month pace because scenario outcomes were not provided."
+    if not goal.desired_date:
+        return "No desired date is set, so scenario outcomes cannot be judged against a deadline."
+
+    successful_scenarios = sum(
+        1
+        for completion_date in scenario_completion_dates
+        if completion_date is not None and completion_date <= goal.desired_date
+    )
+    return (
+        f"{successful_scenarios} of {len(scenario_completion_dates)} preset scenarios "
+        "reach this goal by the desired date."
+    )
+
+
+def format_decimal(value: Decimal) -> str:
+    return format(value.normalize(), "f")
 
 
 def detect_conflicts(

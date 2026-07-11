@@ -47,6 +47,18 @@ export type GoalPriceHistory = {
   created_at: string;
 };
 
+export type ProjectionFactor = {
+  key: string;
+  label: string;
+  value: string;
+  impact: string;
+};
+
+export type ProjectionExplainability = {
+  factors: ProjectionFactor[];
+  assumptions: string[];
+};
+
 export type PlanGoal = {
   goal_id: string;
   title: string;
@@ -61,6 +73,7 @@ export type PlanGoal = {
   status: string;
   probability: string;
   explanation: string;
+  explainability: ProjectionExplainability;
 };
 
 export type MonthlyAllocation = {
