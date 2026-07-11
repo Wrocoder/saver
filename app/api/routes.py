@@ -41,7 +41,10 @@ from app.domain.models import (
     FinancialGoal,
     GoalContribution,
 )
-from app.domain.planning import build_financial_plan, build_scenario_presets
+from app.domain.planning import (
+    build_financial_plan_with_scenario_probability,
+    build_scenario_presets,
+)
 from app.repositories.sqlalchemy import GoalsRepository
 from app.repositories.finance import FinanceRepository
 from app.services.auth import delete_user_account
@@ -326,13 +329,13 @@ def simulate_monthly_amount(
     settings = repo.get_plan_settings()
     summary = finance_repo.build_summary()
     goals, currency_conflicts = repo.list_goals_for_planning_with_warnings()
-    base_plan = build_financial_plan(
+    base_plan = build_financial_plan_with_scenario_probability(
         goals=goals,
         monthly_available_amount=summary.effective_monthly_available_amount,
         strategy=settings.strategy,
     )
     base_plan.conflicts = [*currency_conflicts, *base_plan.conflicts]
-    scenario_plan = build_financial_plan(
+    scenario_plan = build_financial_plan_with_scenario_probability(
         goals=goals,
         monthly_available_amount=payload.monthly_available_amount,
         strategy=settings.strategy,
@@ -354,13 +357,13 @@ def simulate_one_time_inflow(
     settings = repo.get_plan_settings()
     summary = finance_repo.build_summary()
     goals, currency_conflicts = repo.list_goals_for_planning_with_warnings()
-    base_plan = build_financial_plan(
+    base_plan = build_financial_plan_with_scenario_probability(
         goals=goals,
         monthly_available_amount=summary.effective_monthly_available_amount,
         strategy=settings.strategy,
     )
     base_plan.conflicts = [*currency_conflicts, *base_plan.conflicts]
-    scenario_plan = build_financial_plan(
+    scenario_plan = build_financial_plan_with_scenario_probability(
         goals=goals,
         monthly_available_amount=summary.effective_monthly_available_amount,
         strategy=settings.strategy,
@@ -384,13 +387,13 @@ def simulate_skipped_months(
     summary = finance_repo.build_summary()
     goals, currency_conflicts = repo.list_goals_for_planning_with_warnings()
     skipped_months = set(range(payload.start_month, payload.start_month + payload.month_count))
-    base_plan = build_financial_plan(
+    base_plan = build_financial_plan_with_scenario_probability(
         goals=goals,
         monthly_available_amount=summary.effective_monthly_available_amount,
         strategy=settings.strategy,
     )
     base_plan.conflicts = [*currency_conflicts, *base_plan.conflicts]
-    scenario_plan = build_financial_plan(
+    scenario_plan = build_financial_plan_with_scenario_probability(
         goals=goals,
         monthly_available_amount=summary.effective_monthly_available_amount,
         strategy=settings.strategy,
@@ -412,7 +415,7 @@ def get_scenario_presets(
     settings = repo.get_plan_settings()
     summary = finance_repo.build_summary()
     goals, currency_conflicts = repo.list_goals_for_planning_with_warnings()
-    base_plan = build_financial_plan(
+    base_plan = build_financial_plan_with_scenario_probability(
         goals=goals,
         monthly_available_amount=summary.effective_monthly_available_amount,
         strategy=settings.strategy,
@@ -444,7 +447,7 @@ def build_plan_response(
 
     goals, currency_conflicts = repo.list_goals_for_planning_with_warnings()
 
-    plan = build_financial_plan(
+    plan = build_financial_plan_with_scenario_probability(
         goals=goals,
         monthly_available_amount=monthly_available_amount,
         strategy=strategy,

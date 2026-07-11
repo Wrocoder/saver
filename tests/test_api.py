@@ -1,6 +1,9 @@
+from datetime import date
 from decimal import Decimal
 
 from fastapi.testclient import TestClient
+
+from app.domain.planning import add_months
 
 
 def test_create_goal_and_recalculate_plan(client: TestClient) -> None:
@@ -272,6 +275,25 @@ def test_scenario_presets_endpoint_returns_three_named_scenarios(client: TestCli
     assert payload["presets"][0]["skipped_months"] == [4, 8, 12]
     assert payload["presets"][1]["plan"]["goals"][0]["expected_completion_date"] == payload["base"]["goals"][0]["expected_completion_date"]
     assert payload["presets"][2]["plan"]["goals"][0]["expected_completion_date"] < payload["base"]["goals"][0]["expected_completion_date"]
+
+
+def test_plan_probability_is_based_on_scenario_presets(client: TestClient) -> None:
+    client.post(
+        "/api/goals",
+        json={
+            "title": "Tuition",
+            "target_amount": "1200",
+            "currency": "USD",
+            "desired_date": add_months(date.today(), 4).isoformat(),
+            "priority": 1,
+        },
+    )
+
+    response = client.get("/api/plan")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["goals"][0]["probability"] == "medium"
 
 
 def test_goal_ownership_is_scoped_by_user_header(client: TestClient) -> None:

@@ -33,6 +33,7 @@ MVP backend for a SaaS product that helps users plan financial goals, distribute
 - One-time inflow scenario simulation.
 - Skipped-months scenario simulation.
 - Cautious, realistic, and optimistic scenario presets.
+- Goal deadline probability based on cautious, realistic, and optimistic scenario outcomes.
 - JSON export of user-owned data.
 - Frontend downloads the backend user-data export attachment directly without rebuilding JSON client-side.
 - CSV export of goals and goal contributions.
@@ -93,6 +94,7 @@ Frontend MVP surfaces:
 - Run a one-time inflow scenario.
 - Run a skipped-months scenario.
 - Compare cautious, realistic, and optimistic scenario presets.
+- Review scenario-based goal deadline probability.
 - Choose strict priority or proportional allocation.
 - Choose nearest-deadline allocation when dated goals should be funded first.
 - Choose smallest-goal-first allocation to close smaller goals sooner.

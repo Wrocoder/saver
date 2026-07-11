@@ -68,6 +68,7 @@ def build_financial_plan(
     today: date | None = None,
     one_time_inflows: dict[int, Decimal] | None = None,
     skipped_months: set[int] | None = None,
+    scenario_completion_dates: dict[str, list[date | None]] | None = None,
 ) -> FinancialPlanResult:
     today = today or date.today()
     active_goals = [
@@ -95,6 +96,11 @@ def build_financial_plan(
             allocated_first_month=first_month_allocations.get(goal.id, Decimal("0")),
             expected_completion_date=completion_dates.get(goal.id),
             today=today,
+            scenario_completion_dates=(
+                scenario_completion_dates.get(goal.id)
+                if scenario_completion_dates is not None
+                else None
+            ),
         )
         for goal in active_goals
     ]
@@ -112,11 +118,41 @@ def build_financial_plan(
     )
 
 
+def build_financial_plan_with_scenario_probability(
+    goals: list[FinancialGoal],
+    monthly_available_amount: Decimal,
+    strategy: AllocationStrategy,
+    today: date | None = None,
+    one_time_inflows: dict[int, Decimal] | None = None,
+    skipped_months: set[int] | None = None,
+) -> FinancialPlanResult:
+    today = today or date.today()
+    presets = build_scenario_presets(
+        goals=goals,
+        monthly_available_amount=monthly_available_amount,
+        strategy=strategy,
+        today=today,
+        one_time_inflows=one_time_inflows,
+        skipped_months=skipped_months,
+    )
+    return build_financial_plan(
+        goals=goals,
+        monthly_available_amount=monthly_available_amount,
+        strategy=strategy,
+        today=today,
+        one_time_inflows=one_time_inflows,
+        skipped_months=skipped_months,
+        scenario_completion_dates=completion_dates_by_goal(presets),
+    )
+
+
 def build_scenario_presets(
     goals: list[FinancialGoal],
     monthly_available_amount: Decimal,
     strategy: AllocationStrategy,
     today: date | None = None,
+    one_time_inflows: dict[int, Decimal] | None = None,
+    skipped_months: set[int] | None = None,
 ) -> list[ScenarioPresetPlan]:
     today = today or date.today()
     configs = [
@@ -158,13 +194,19 @@ def build_scenario_presets(
     presets: list[ScenarioPresetPlan] = []
     for config in configs:
         amount = scale_monthly_amount(monthly_available_amount, config["multiplier"])
-        skipped_months = list(config["skipped_months"])
+        preset_skipped_months = sorted(
+            {
+                *set(skipped_months or set()),
+                *set(config["skipped_months"]),
+            }
+        )
         plan = build_financial_plan(
             goals=goals,
             monthly_available_amount=amount,
             strategy=strategy,
             today=today,
-            skipped_months=set(skipped_months),
+            one_time_inflows=one_time_inflows,
+            skipped_months=set(preset_skipped_months),
         )
         presets.append(
             ScenarioPresetPlan(
@@ -173,12 +215,22 @@ def build_scenario_presets(
                 description=str(config["description"]),
                 assumptions=list(config["assumptions"]),
                 monthly_available_amount=amount,
-                skipped_months=skipped_months,
+                skipped_months=preset_skipped_months,
                 plan=plan,
             )
         )
 
     return presets
+
+
+def completion_dates_by_goal(
+    presets: list[ScenarioPresetPlan],
+) -> dict[str, list[date | None]]:
+    results: dict[str, list[date | None]] = {}
+    for preset in presets:
+        for goal in preset.plan.goals:
+            results.setdefault(goal.goal_id, []).append(goal.expected_completion_date)
+    return results
 
 
 def scale_monthly_amount(monthly_available_amount: Decimal, multiplier: Decimal) -> Decimal:
@@ -400,6 +452,7 @@ def build_goal_projection(
     allocated_first_month: Decimal,
     expected_completion_date: date | None,
     today: date,
+    scenario_completion_dates: list[date | None] | None = None,
 ) -> GoalProjection:
     remaining = goal.remaining_amount()
     progress = progress_percent(goal.current_amount, goal.target_amount)
@@ -418,7 +471,9 @@ def build_goal_projection(
         else None
     )
     status = projection_status(goal, expected_completion_date, today)
-    probability = probability_label(allocated_first_month, required_monthly, remaining)
+    probability = scenario_probability_label(goal, scenario_completion_dates)
+    if probability is None:
+        probability = probability_label(allocated_first_month, required_monthly, remaining)
     explanation = explain_projection(goal, expected_completion_date, deviation_days, status)
 
     return GoalProjection(
@@ -473,6 +528,32 @@ def probability_label(
     if ratio >= Decimal("1.10"):
         return "high"
     if ratio >= Decimal("0.80"):
+        return "medium"
+    return "low"
+
+
+def scenario_probability_label(
+    goal: FinancialGoal,
+    scenario_completion_dates: list[date | None] | None,
+) -> str | None:
+    if scenario_completion_dates is None:
+        return None
+    if goal.remaining_amount() == 0:
+        return "completed"
+    if not goal.desired_date:
+        return "unknown"
+
+    successful_scenarios = sum(
+        1
+        for completion_date in scenario_completion_dates
+        if completion_date is not None and completion_date <= goal.desired_date
+    )
+    scenario_count = len(scenario_completion_dates)
+    if scenario_count == 0:
+        return "unknown"
+    if successful_scenarios == scenario_count:
+        return "high"
+    if successful_scenarios >= 2:
         return "medium"
     return "low"
 

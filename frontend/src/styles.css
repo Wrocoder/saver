@@ -690,6 +690,16 @@ select:focus {
   color: #236a4f;
 }
 
+.probability.medium {
+  background: #fff4cf;
+  color: #7a5400;
+}
+
+.probability.low {
+  background: #ffe1dc;
+  color: #9a2f1d;
+}
+
 .status-pill.archived {
   background: #edf0ef;
   color: #66756e;

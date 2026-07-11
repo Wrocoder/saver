@@ -3426,7 +3426,9 @@ function PlanSection({
             <div className="projection-meta">
               <span>{formatMoney(goal.remaining_amount, goal.currency)} left</span>
               <span>{goal.expected_completion_date ?? "No date"}</span>
-              <span className={`probability ${goal.probability}`}>{goal.probability}</span>
+              <span className={`probability ${goal.probability}`} title="Based on cautious, realistic, and optimistic scenarios">
+                {goal.probability}
+              </span>
             </div>
           </article>
         ))}

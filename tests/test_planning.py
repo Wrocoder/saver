@@ -7,7 +7,11 @@ from app.domain.models import (
     DeadlineType,
     FinancialGoal,
 )
-from app.domain.planning import build_financial_plan, build_scenario_presets
+from app.domain.planning import (
+    build_financial_plan,
+    build_financial_plan_with_scenario_probability,
+    build_scenario_presets,
+)
 
 
 def test_single_goal_expected_completion_with_monthly_amount() -> None:
@@ -328,6 +332,42 @@ def test_scenario_presets_create_cautious_realistic_and_optimistic_plans() -> No
     assert optimistic.skipped_months == []
     assert cautious.plan.goals[0].expected_completion_date > realistic.plan.goals[0].expected_completion_date
     assert optimistic.plan.goals[0].expected_completion_date < realistic.plan.goals[0].expected_completion_date
+
+
+def test_scenario_probability_uses_preset_deadline_outcomes() -> None:
+    goal = FinancialGoal(
+        title="Training",
+        target_amount=Decimal("800"),
+        current_amount=Decimal("0"),
+        desired_date=date(2026, 11, 1),
+    )
+
+    plan = build_financial_plan_with_scenario_probability(
+        goals=[goal],
+        monthly_available_amount=Decimal("200"),
+        strategy=AllocationStrategy(type=AllocationStrategyType.STRICT_PRIORITY),
+        today=date(2026, 7, 1),
+    )
+
+    assert plan.goals[0].probability == "medium"
+
+
+def test_scenario_probability_is_low_when_only_optimistic_preset_hits_deadline() -> None:
+    goal = FinancialGoal(
+        title="Tuition",
+        target_amount=Decimal("900"),
+        current_amount=Decimal("0"),
+        desired_date=date(2026, 11, 1),
+    )
+
+    plan = build_financial_plan_with_scenario_probability(
+        goals=[goal],
+        monthly_available_amount=Decimal("200"),
+        strategy=AllocationStrategy(type=AllocationStrategyType.STRICT_PRIORITY),
+        today=date(2026, 7, 1),
+    )
+
+    assert plan.goals[0].probability == "low"
 
 
 def test_hard_deadline_is_marked_at_risk_when_projection_is_late() -> None:
