@@ -7,7 +7,11 @@ from app.domain.models import (
     DeadlineType,
     FinancialGoal,
 )
-from app.domain.planning import build_financial_plan
+from app.domain.planning import (
+    build_financial_plan,
+    build_financial_plan_with_scenario_probability,
+    build_scenario_presets,
+)
 
 
 def test_single_goal_expected_completion_with_monthly_amount() -> None:
@@ -257,6 +261,143 @@ def test_one_time_inflow_can_fund_goal_without_monthly_amount() -> None:
     assert projection.expected_completion_date == date(2026, 9, 1)
     assert projection.status == "on_track"
     assert plan.conflicts == []
+
+
+def test_skipped_months_delay_goal_schedule() -> None:
+    goal = FinancialGoal(
+        title="Camera",
+        target_amount=Decimal("300"),
+        current_amount=Decimal("0"),
+    )
+
+    plan = build_financial_plan(
+        goals=[goal],
+        monthly_available_amount=Decimal("100"),
+        strategy=AllocationStrategy(type=AllocationStrategyType.STRICT_PRIORITY),
+        today=date(2026, 7, 1),
+        skipped_months={2},
+    )
+
+    assert [period.month_index for period in plan.monthly_schedule] == [1, 3, 4]
+    assert all(period.allocations == {goal.id: Decimal("100")} for period in plan.monthly_schedule)
+    assert plan.goals[0].allocated_first_month == Decimal("100")
+    assert plan.goals[0].expected_completion_date == date(2026, 11, 1)
+
+
+def test_skipping_first_month_sets_first_month_allocation_to_zero() -> None:
+    goal = FinancialGoal(
+        title="Course",
+        target_amount=Decimal("200"),
+        current_amount=Decimal("0"),
+    )
+
+    plan = build_financial_plan(
+        goals=[goal],
+        monthly_available_amount=Decimal("100"),
+        strategy=AllocationStrategy(type=AllocationStrategyType.STRICT_PRIORITY),
+        today=date(2026, 7, 1),
+        skipped_months={1},
+    )
+
+    assert [period.month_index for period in plan.monthly_schedule] == [2, 3]
+    assert plan.goals[0].allocated_first_month == Decimal("0")
+    assert plan.goals[0].expected_completion_date == date(2026, 10, 1)
+    assert plan.goals[0].status == "on_track"
+
+
+def test_scenario_presets_create_cautious_realistic_and_optimistic_plans() -> None:
+    goal = FinancialGoal(
+        title="Bike",
+        target_amount=Decimal("1000"),
+        current_amount=Decimal("0"),
+    )
+
+    presets = build_scenario_presets(
+        goals=[goal],
+        monthly_available_amount=Decimal("100"),
+        strategy=AllocationStrategy(type=AllocationStrategyType.STRICT_PRIORITY),
+        today=date(2026, 7, 1),
+    )
+
+    assert [preset.name for preset in presets] == ["cautious", "realistic", "optimistic"]
+    assert [preset.monthly_available_amount for preset in presets] == [
+        Decimal("80.00"),
+        Decimal("100.00"),
+        Decimal("120.00"),
+    ]
+    cautious, realistic, optimistic = presets
+    assert cautious.skipped_months == [4, 8, 12]
+    assert cautious.plan.monthly_schedule[3].month_index == 5
+    assert realistic.skipped_months == []
+    assert optimistic.skipped_months == []
+    assert cautious.plan.goals[0].expected_completion_date > realistic.plan.goals[0].expected_completion_date
+    assert optimistic.plan.goals[0].expected_completion_date < realistic.plan.goals[0].expected_completion_date
+
+
+def test_scenario_probability_uses_preset_deadline_outcomes() -> None:
+    goal = FinancialGoal(
+        title="Training",
+        target_amount=Decimal("800"),
+        current_amount=Decimal("0"),
+        desired_date=date(2026, 11, 1),
+    )
+
+    plan = build_financial_plan_with_scenario_probability(
+        goals=[goal],
+        monthly_available_amount=Decimal("200"),
+        strategy=AllocationStrategy(type=AllocationStrategyType.STRICT_PRIORITY),
+        today=date(2026, 7, 1),
+    )
+
+    assert plan.goals[0].probability == "medium"
+
+
+def test_scenario_probability_is_low_when_only_optimistic_preset_hits_deadline() -> None:
+    goal = FinancialGoal(
+        title="Tuition",
+        target_amount=Decimal("900"),
+        current_amount=Decimal("0"),
+        desired_date=date(2026, 11, 1),
+    )
+
+    plan = build_financial_plan_with_scenario_probability(
+        goals=[goal],
+        monthly_available_amount=Decimal("200"),
+        strategy=AllocationStrategy(type=AllocationStrategyType.STRICT_PRIORITY),
+        today=date(2026, 7, 1),
+    )
+
+    assert plan.goals[0].probability == "low"
+
+
+def test_goal_projection_includes_explainability_payload() -> None:
+    goal = FinancialGoal(
+        title="Laptop",
+        target_amount=Decimal("1000"),
+        current_amount=Decimal("250"),
+        desired_date=date(2026, 12, 1),
+        priority=2,
+    )
+
+    plan = build_financial_plan_with_scenario_probability(
+        goals=[goal],
+        monthly_available_amount=Decimal("300"),
+        strategy=AllocationStrategy(type=AllocationStrategyType.STRICT_PRIORITY),
+        today=date(2026, 7, 1),
+    )
+
+    explainability = plan.goals[0].explainability
+    factors = {factor.key: factor for factor in explainability.factors}
+    assert factors["target_amount"].value == "1000"
+    assert factors["current_amount"].value == "250"
+    assert factors["remaining_amount"].value == "750"
+    assert factors["monthly_available_amount"].value == "300"
+    assert factors["allocation_strategy"].value == "strict_priority"
+    assert factors["priority"].value == "2"
+    assert factors["desired_date"].value == "2026-12-01"
+    assert factors["expected_completion_date"].value == "2026-10-01"
+    assert "preset scenarios" in factors["scenario_probability"].impact
+    assert "monthly allocation periods" in explainability.assumptions[0]
 
 
 def test_hard_deadline_is_marked_at_risk_when_projection_is_late() -> None:

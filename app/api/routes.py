@@ -22,8 +22,10 @@ from app.api.schemas import (
     OneTimeInflowScenarioRequest,
     PlanResponse,
     PriorityUpdate,
+    ScenarioPresetsResponse,
     ScenarioRequest,
     ScenarioResponse,
+    SkippedMonthsScenarioRequest,
     StrategyResponse,
     StrategyUpdate,
     UserCreate,
@@ -39,7 +41,10 @@ from app.domain.models import (
     FinancialGoal,
     GoalContribution,
 )
-from app.domain.planning import build_financial_plan
+from app.domain.planning import (
+    build_financial_plan_with_scenario_probability,
+    build_scenario_presets,
+)
 from app.repositories.sqlalchemy import GoalsRepository
 from app.repositories.finance import FinanceRepository
 from app.services.auth import delete_user_account
@@ -324,13 +329,13 @@ def simulate_monthly_amount(
     settings = repo.get_plan_settings()
     summary = finance_repo.build_summary()
     goals, currency_conflicts = repo.list_goals_for_planning_with_warnings()
-    base_plan = build_financial_plan(
+    base_plan = build_financial_plan_with_scenario_probability(
         goals=goals,
         monthly_available_amount=summary.effective_monthly_available_amount,
         strategy=settings.strategy,
     )
     base_plan.conflicts = [*currency_conflicts, *base_plan.conflicts]
-    scenario_plan = build_financial_plan(
+    scenario_plan = build_financial_plan_with_scenario_probability(
         goals=goals,
         monthly_available_amount=payload.monthly_available_amount,
         strategy=settings.strategy,
@@ -352,13 +357,13 @@ def simulate_one_time_inflow(
     settings = repo.get_plan_settings()
     summary = finance_repo.build_summary()
     goals, currency_conflicts = repo.list_goals_for_planning_with_warnings()
-    base_plan = build_financial_plan(
+    base_plan = build_financial_plan_with_scenario_probability(
         goals=goals,
         monthly_available_amount=summary.effective_monthly_available_amount,
         strategy=settings.strategy,
     )
     base_plan.conflicts = [*currency_conflicts, *base_plan.conflicts]
-    scenario_plan = build_financial_plan(
+    scenario_plan = build_financial_plan_with_scenario_probability(
         goals=goals,
         monthly_available_amount=summary.effective_monthly_available_amount,
         strategy=settings.strategy,
@@ -369,6 +374,64 @@ def simulate_one_time_inflow(
         scenario_name=payload.scenario_name,
         base=base_plan,
         scenario=scenario_plan,
+    )
+
+
+@router.post("/scenarios/skipped-months", response_model=ScenarioResponse)
+def simulate_skipped_months(
+    payload: SkippedMonthsScenarioRequest,
+    repo: GoalsRepository = Depends(get_repository),
+    finance_repo: FinanceRepository = Depends(get_finance_repository),
+) -> ScenarioResponse:
+    settings = repo.get_plan_settings()
+    summary = finance_repo.build_summary()
+    goals, currency_conflicts = repo.list_goals_for_planning_with_warnings()
+    skipped_months = set(range(payload.start_month, payload.start_month + payload.month_count))
+    base_plan = build_financial_plan_with_scenario_probability(
+        goals=goals,
+        monthly_available_amount=summary.effective_monthly_available_amount,
+        strategy=settings.strategy,
+    )
+    base_plan.conflicts = [*currency_conflicts, *base_plan.conflicts]
+    scenario_plan = build_financial_plan_with_scenario_probability(
+        goals=goals,
+        monthly_available_amount=summary.effective_monthly_available_amount,
+        strategy=settings.strategy,
+        skipped_months=skipped_months,
+    )
+    scenario_plan.conflicts = [*currency_conflicts, *scenario_plan.conflicts]
+    return ScenarioResponse(
+        scenario_name=payload.scenario_name,
+        base=base_plan,
+        scenario=scenario_plan,
+    )
+
+
+@router.get("/scenarios/presets", response_model=ScenarioPresetsResponse)
+def get_scenario_presets(
+    repo: GoalsRepository = Depends(get_repository),
+    finance_repo: FinanceRepository = Depends(get_finance_repository),
+) -> ScenarioPresetsResponse:
+    settings = repo.get_plan_settings()
+    summary = finance_repo.build_summary()
+    goals, currency_conflicts = repo.list_goals_for_planning_with_warnings()
+    base_plan = build_financial_plan_with_scenario_probability(
+        goals=goals,
+        monthly_available_amount=summary.effective_monthly_available_amount,
+        strategy=settings.strategy,
+    )
+    base_plan.conflicts = [*currency_conflicts, *base_plan.conflicts]
+    presets = build_scenario_presets(
+        goals=goals,
+        monthly_available_amount=summary.effective_monthly_available_amount,
+        strategy=settings.strategy,
+    )
+    for preset in presets:
+        preset.plan.conflicts = [*currency_conflicts, *preset.plan.conflicts]
+
+    return ScenarioPresetsResponse(
+        base=base_plan,
+        presets=[preset.model_dump() for preset in presets],
     )
 
 
@@ -384,7 +447,7 @@ def build_plan_response(
 
     goals, currency_conflicts = repo.list_goals_for_planning_with_warnings()
 
-    plan = build_financial_plan(
+    plan = build_financial_plan_with_scenario_probability(
         goals=goals,
         monthly_available_amount=monthly_available_amount,
         strategy=strategy,

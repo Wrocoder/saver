@@ -66,6 +66,7 @@ import {
   NotificationSettings,
   Plan,
   RecurringRule,
+  ScenarioPresetsResponse,
   ScenarioResponse,
   trackEvent,
   User
@@ -1084,6 +1085,25 @@ function GoalPanel({
                     <DetailMetric label="Importance" value={`${goal.importance}/5`} />
                   </div>
                   {projection?.explanation && <div className="goal-detail-note">{projection.explanation}</div>}
+                  {projection?.explainability && (
+                    <div className="explainability-panel">
+                      <strong>Date drivers</strong>
+                      <div className="explainability-grid">
+                        {projection.explainability.factors.slice(0, 8).map((factor) => (
+                          <div className="explainability-factor" key={factor.key}>
+                            <span>{factor.label}</span>
+                            <strong>{factor.value}</strong>
+                            <small>{factor.impact}</small>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="explainability-assumptions">
+                        {projection.explainability.assumptions.map((assumption) => (
+                          <span key={assumption}>{assumption}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {(goal.category || goal.description || goal.notes || goal.product_url || goal.expected_purchase_date) && (
                     <div className="goal-detail-meta">
                       {goal.category && <span>{goal.category}</span>}
@@ -1573,7 +1593,10 @@ function ScenarioPanel({
   const [amount, setAmount] = useState("");
   const [oneTimeAmount, setOneTimeAmount] = useState("");
   const [oneTimeMonth, setOneTimeMonth] = useState("2");
+  const [skipStartMonth, setSkipStartMonth] = useState("1");
+  const [skipMonthCount, setSkipMonthCount] = useState("1");
   const [scenario, setScenario] = useState<ScenarioResponse | null>(null);
+  const [presets, setPresets] = useState<ScenarioPresetsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [scenarioLoading, setScenarioLoading] = useState(false);
 
@@ -1590,6 +1613,7 @@ function ScenarioPanel({
         })
       });
       setScenario(result);
+      setPresets(null);
       void trackEvent(token, "scenario_run", {
         scenario_name: result.scenario_name,
         monthly_available_amount: amount
@@ -1615,6 +1639,7 @@ function ScenarioPanel({
         })
       });
       setScenario(result);
+      setPresets(null);
       void trackEvent(token, "scenario_run", {
         scenario_name: result.scenario_name,
         one_time_amount: oneTimeAmount,
@@ -1627,8 +1652,54 @@ function ScenarioPanel({
     }
   }
 
+  async function submitSkippedMonths(event: FormEvent) {
+    event.preventDefault();
+    setScenarioLoading(true);
+    setError(null);
+    try {
+      const result = await apiRequest<ScenarioResponse>("/api/scenarios/skipped-months", token, {
+        method: "POST",
+        body: JSON.stringify({
+          scenario_name: "skipped_months",
+          start_month: Number(skipStartMonth),
+          month_count: Number(skipMonthCount)
+        })
+      });
+      setScenario(result);
+      setPresets(null);
+      void trackEvent(token, "scenario_run", {
+        scenario_name: result.scenario_name,
+        start_month: Number(skipStartMonth),
+        month_count: Number(skipMonthCount)
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not run skipped months scenario");
+    } finally {
+      setScenarioLoading(false);
+    }
+  }
+
+  async function runPresets() {
+    setScenarioLoading(true);
+    setError(null);
+    try {
+      const result = await apiRequest<ScenarioPresetsResponse>("/api/scenarios/presets", token);
+      setPresets(result);
+      setScenario(null);
+      void trackEvent(token, "scenario_run", {
+        scenario_name: "scenario_presets",
+        preset_count: result.presets.length
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not run scenario presets");
+    } finally {
+      setScenarioLoading(false);
+    }
+  }
+
   const baseFirst = scenario?.base.goals[0];
   const scenarioFirst = scenario?.scenario.goals[0];
+  const scenarioCurrency = summary?.base_currency ?? plan?.goals[0]?.currency ?? "USD";
 
   return (
     <section id="scenario" className="panel" aria-busy={status.loading || scenarioLoading}>
@@ -1683,8 +1754,40 @@ function ScenarioPanel({
         </label>
         <button className="primary-button" type="submit" disabled={scenarioLoading}><Plus size={17} /> Run inflow</button>
       </form>
+      <form className="scenario-form skip-months-form" onSubmit={submitSkippedMonths}>
+        <label>
+          Skip from month
+          <input
+            type="number"
+            min="1"
+            max="600"
+            step="1"
+            value={skipStartMonth}
+            onChange={(event) => setSkipStartMonth(event.target.value)}
+            required
+          />
+        </label>
+        <label>
+          Months skipped
+          <input
+            type="number"
+            min="1"
+            max="60"
+            step="1"
+            value={skipMonthCount}
+            onChange={(event) => setSkipMonthCount(event.target.value)}
+            required
+          />
+        </label>
+        <button className="primary-button" type="submit" disabled={scenarioLoading}><CalendarClock size={17} /> Run skip</button>
+      </form>
+      <div className="scenario-actions">
+        <button className="secondary-button" type="button" onClick={() => void runPresets()} disabled={scenarioLoading}>
+          <BarChart3 size={17} /> Run presets
+        </button>
+      </div>
       {error && <div className="inline-error" role="alert">{error}</div>}
-      {!scenario && <EmptyState text="Run a scenario to compare projected dates." />}
+      {!scenario && !presets && <EmptyState text="Run a scenario to compare projected dates." />}
       {scenario && (
         <div className="scenario-result">
           <div>
@@ -1697,6 +1800,39 @@ function ScenarioPanel({
             <strong>{scenarioFirst?.title ?? "No goal"}</strong>
             <small>{scenarioFirst?.expected_completion_date ?? "No date"}</small>
           </div>
+        </div>
+      )}
+      {presets && (
+        <div className="preset-scenarios-grid">
+          {presets.presets.map((preset) => {
+            const firstGoal = preset.plan.goals[0];
+            return (
+              <article className="preset-scenario-card" key={preset.name}>
+                <div className="preset-card-header">
+                  <div>
+                    <strong>{preset.label}</strong>
+                    <span>{preset.description}</span>
+                  </div>
+                  <small>{formatMoney(preset.monthly_available_amount, scenarioCurrency)}</small>
+                </div>
+                <div className="preset-card-metrics">
+                  <div>
+                    <span>First goal</span>
+                    <strong>{firstGoal?.title ?? "No goal"}</strong>
+                  </div>
+                  <div>
+                    <span>Date</span>
+                    <strong>{firstGoal?.expected_completion_date ?? "No date"}</strong>
+                  </div>
+                </div>
+                <div className="preset-assumptions">
+                  {preset.assumptions.map((assumption) => (
+                    <span key={assumption}>{assumption}</span>
+                  ))}
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
     </section>
@@ -3309,7 +3445,9 @@ function PlanSection({
             <div className="projection-meta">
               <span>{formatMoney(goal.remaining_amount, goal.currency)} left</span>
               <span>{goal.expected_completion_date ?? "No date"}</span>
-              <span className={`probability ${goal.probability}`}>{goal.probability}</span>
+              <span className={`probability ${goal.probability}`} title="Based on cautious, realistic, and optimistic scenarios">
+                {goal.probability}
+              </span>
             </div>
           </article>
         ))}

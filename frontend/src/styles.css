@@ -432,12 +432,22 @@ select:focus-visible {
   grid-template-columns: minmax(150px, 1fr) 110px auto;
 }
 
+.scenario-form.skip-months-form {
+  grid-template-columns: minmax(150px, 1fr) minmax(130px, 0.8fr) auto;
+}
+
 .scenario-form label {
   display: grid;
   gap: 7px;
   color: #51625a;
   font-weight: 650;
   font-size: 13px;
+}
+
+.scenario-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 14px;
 }
 
 .allocation-form {
@@ -622,6 +632,58 @@ select:focus {
   padding-left: 10px;
 }
 
+.explainability-panel {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #dce6e1;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f8faf9;
+}
+
+.explainability-panel > strong {
+  color: #183027;
+  font-size: 13px;
+}
+
+.explainability-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.explainability-factor {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.explainability-factor span,
+.explainability-factor small,
+.explainability-assumptions span {
+  color: #64746d;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.explainability-factor strong {
+  color: #183027;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.explainability-assumptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.explainability-assumptions span {
+  border-radius: 999px;
+  background: #edf1ef;
+  padding: 5px 8px;
+}
+
 .goal-detail-meta {
   display: flex;
   gap: 10px;
@@ -678,6 +740,16 @@ select:focus {
 .probability.high {
   background: #dff3df;
   color: #236a4f;
+}
+
+.probability.medium {
+  background: #fff4cf;
+  color: #7a5400;
+}
+
+.probability.low {
+  background: #ffe1dc;
+  color: #9a2f1d;
 }
 
 .status-pill.archived {
@@ -1213,6 +1285,60 @@ select:focus {
   background: #f6f8f7;
 }
 
+.preset-scenarios-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.preset-scenario-card {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #d9e4df;
+  border-radius: 8px;
+  padding: 14px;
+  background: #f9fbfa;
+}
+
+.preset-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.preset-card-header div,
+.preset-card-metrics > div,
+.preset-assumptions {
+  display: grid;
+  gap: 4px;
+}
+
+.preset-card-header strong,
+.preset-card-metrics strong {
+  color: #17251f;
+}
+
+.preset-card-header span,
+.preset-card-header small,
+.preset-card-metrics span,
+.preset-assumptions span {
+  color: #66766f;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.preset-card-header small {
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.preset-card-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
 .monthly-plan-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 180px;
@@ -1578,8 +1704,10 @@ select:focus {
   .report-grid,
   .analytics-grid,
   .monthly-calendar,
+  .preset-scenarios-grid,
   .planned-actual-summary,
-  .goal-detail-grid {
+  .goal-detail-grid,
+  .explainability-grid {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -1590,6 +1718,8 @@ select:focus {
   .price-form,
   .rules-form,
   .scenario-form,
+  .scenario-form.one-time-form,
+  .scenario-form.skip-months-form,
   .goal-row-edit,
   .entry-edit-grid {
     grid-template-columns: 1fr 1fr;
@@ -1686,17 +1816,21 @@ select:focus {
   .analytics-grid,
   .monthly-calendar,
   .monthly-plan-toolbar,
+  .preset-scenarios-grid,
   .planned-actual-summary,
   .planned-actual-row,
   .csv-actions,
   .csv-import-row,
   .csv-period-row,
   .goal-detail-grid,
+  .explainability-grid,
   .compact-form,
   .cashflow-form,
   .contribution-form,
   .currency-form,
   .scenario-form,
+  .scenario-form.one-time-form,
+  .scenario-form.skip-months-form,
   .scenario-result,
   .auth-layout {
     grid-template-columns: 1fr;

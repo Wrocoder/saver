@@ -1,6 +1,9 @@
+from datetime import date
 from decimal import Decimal
 
 from fastapi.testclient import TestClient
+
+from app.domain.planning import add_months
 
 
 def test_create_goal_and_recalculate_plan(client: TestClient) -> None:
@@ -226,6 +229,96 @@ def test_one_time_inflow_scenario_adds_extra_funds_to_selected_month(client: Tes
     assert Decimal(payload["base"]["monthly_schedule"][1]["allocations"][goal["id"]]) == Decimal("300")
     assert Decimal(payload["scenario"]["monthly_schedule"][1]["allocations"][goal["id"]]) == Decimal("700")
     assert payload["scenario"]["goals"][0]["expected_completion_date"] < payload["base"]["goals"][0]["expected_completion_date"]
+
+
+def test_skipped_months_scenario_removes_regular_funding_for_period(client: TestClient) -> None:
+    goal = client.post(
+        "/api/goals",
+        json={"title": "Laptop", "target_amount": "900", "currency": "USD", "priority": 1},
+    ).json()
+
+    response = client.post(
+        "/api/scenarios/skipped-months",
+        json={
+            "scenario_name": "missed_salary",
+            "start_month": 1,
+            "month_count": 1,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["scenario_name"] == "missed_salary"
+    assert Decimal(payload["base"]["monthly_schedule"][0]["allocations"][goal["id"]]) == Decimal("300")
+    assert payload["scenario"]["monthly_schedule"][0]["month_index"] == 2
+    assert Decimal(payload["scenario"]["monthly_schedule"][0]["allocations"][goal["id"]]) == Decimal("300")
+    assert payload["scenario"]["goals"][0]["allocated_first_month"] == "0"
+    assert payload["scenario"]["goals"][0]["expected_completion_date"] > payload["base"]["goals"][0]["expected_completion_date"]
+
+
+def test_scenario_presets_endpoint_returns_three_named_scenarios(client: TestClient) -> None:
+    client.post(
+        "/api/goals",
+        json={"title": "Car", "target_amount": "1000", "currency": "USD", "priority": 1},
+    )
+
+    response = client.get("/api/scenarios/presets")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [preset["name"] for preset in payload["presets"]] == ["cautious", "realistic", "optimistic"]
+    assert [Decimal(preset["monthly_available_amount"]) for preset in payload["presets"]] == [
+        Decimal("240.00"),
+        Decimal("300.00"),
+        Decimal("360.00"),
+    ]
+    assert payload["presets"][0]["skipped_months"] == [4, 8, 12]
+    assert payload["presets"][1]["plan"]["goals"][0]["expected_completion_date"] == payload["base"]["goals"][0]["expected_completion_date"]
+    assert payload["presets"][2]["plan"]["goals"][0]["expected_completion_date"] < payload["base"]["goals"][0]["expected_completion_date"]
+
+
+def test_plan_probability_is_based_on_scenario_presets(client: TestClient) -> None:
+    client.post(
+        "/api/goals",
+        json={
+            "title": "Tuition",
+            "target_amount": "1200",
+            "currency": "USD",
+            "desired_date": add_months(date.today(), 4).isoformat(),
+            "priority": 1,
+        },
+    )
+
+    response = client.get("/api/plan")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["goals"][0]["probability"] == "medium"
+
+
+def test_plan_goal_contains_explainability_payload(client: TestClient) -> None:
+    client.post(
+        "/api/goals",
+        json={
+            "title": "Laptop",
+            "target_amount": "1000",
+            "current_amount": "250",
+            "currency": "USD",
+            "priority": 2,
+        },
+    )
+
+    response = client.get("/api/plan")
+
+    assert response.status_code == 200
+    goal = response.json()["goals"][0]
+    factors = {factor["key"]: factor for factor in goal["explainability"]["factors"]}
+    assert factors["target_amount"]["value"] == "1000"
+    assert factors["current_amount"]["value"] == "250"
+    assert factors["remaining_amount"]["value"] == "750"
+    assert factors["monthly_available_amount"]["value"] == "300"
+    assert factors["allocation_strategy"]["value"] == "strict_priority"
+    assert goal["explainability"]["assumptions"]
 
 
 def test_goal_ownership_is_scoped_by_user_header(client: TestClient) -> None:
